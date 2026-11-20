@@ -21,6 +21,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 
 /**
  * The car bridge's door into the player.
@@ -57,6 +63,7 @@ class CarSessionController(
     }
 
     init {
+        CarPlaylistGateway.init(app)
         val token = SessionToken(app, ComponentName(app, PlaybackService::class.java))
         val f = MediaController.Builder(app, token).buildAsync()
         future = f
@@ -114,6 +121,102 @@ class CarSessionController(
                 }
         }
     }
+
+    /** RPC entry point: the browser names a method and gets one typed answer. */
+    fun handle(call: CallDto, onResult: (ResultDto) -> Unit) {
+        scope.launch {
+            runCatching { execute(call) }
+                .onSuccess { data ->
+                    onResult(ResultDto(id = call.id, data = data))
+                    publishState()
+                }
+                .onFailure { t ->
+                    val message = t.message ?: "호출 실패"
+                    onResult(ResultDto(id = call.id, ok = false, error = message, message = message))
+                }
+        }
+    }
+
+    private suspend fun execute(call: CallDto): JsonElement? {
+        val p = call.params
+        return when (call.method) {
+            "search" -> {
+                val (id, songs) = CarSearchGateway.search(p.string("query").orEmpty())
+                CarJson.codec.encodeToJsonElement(
+                    SearchDataDto.serializer(),
+                    SearchDataDto(songs = songs, searchId = id),
+                )
+            }
+            "player.play", "player.pause", "player.toggle", "player.next",
+            "player.previous", "player.shuffle", "player.repeat", "player.like" -> {
+                execute(CommandDto(id = call.id, name = call.method.removePrefix("player.")))
+                null
+            }
+            "player.seek" -> {
+                execute(CommandDto(id = call.id, name = "seek", positionMs = p.long("positionMs")))
+                null
+            }
+            "player.skipTo" -> {
+                execute(CommandDto(id = call.id, name = "skipTo", index = p.int("index")))
+                null
+            }
+            "player.volume" -> {
+                execute(
+                    CommandDto(
+                        id = call.id,
+                        name = "volume",
+                        level = p["level"]?.jsonPrimitive?.intOrNull,
+                        delta = p["delta"]?.jsonPrimitive?.intOrNull,
+                    ),
+                )
+                null
+            }
+            "player.playSearch" -> {
+                val pair = CarSearchGateway.tracks(p.string("searchId").orEmpty(), p.int("index"))
+                    ?: error("검색 결과가 만료되었습니다")
+                requireController().playSongs(pair.first, pair.second)
+                null
+            }
+            "queue.move" -> {
+                requireController().moveMediaItem(p.int("from"), p.int("to"))
+                null
+            }
+            "queue.remove" -> {
+                requireController().removeMediaItem(p.int("index"))
+                null
+            }
+            "lyrics.get" -> CarJson.codec.encodeToJsonElement(
+                LyricsDataDto.serializer(),
+                CarLyricsGateway.current(app, requireController()),
+            )
+            "playlist.list" -> CarJson.codec.encodeToJsonElement(
+                PlaylistListDto.serializer(),
+                CarPlaylistGateway.list(),
+            )
+            "playlist.tracks" -> CarJson.codec.encodeToJsonElement(
+                SongListDto.serializer(),
+                CarPlaylistGateway.tracks(p.string("id").orEmpty()),
+            )
+            "playlist.play" -> {
+                CarPlaylistGateway.play(
+                    requireController(),
+                    p.string("id").orEmpty(),
+                    p.int("index"),
+                )
+                null
+            }
+            "ping" -> null
+            else -> error("알 수 없는 메서드: ${call.method}")
+        }
+    }
+
+    private fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
+
+    private fun JsonObject.int(key: String, fallback: Int = 0): Int =
+        this[key]?.jsonPrimitive?.intOrNull ?: fallback
+
+    private fun JsonObject.long(key: String, fallback: Long = 0L): Long =
+        this[key]?.jsonPrimitive?.longOrNull ?: fallback
 
     private suspend fun execute(command: CommandDto) {
         when (command.name) {
