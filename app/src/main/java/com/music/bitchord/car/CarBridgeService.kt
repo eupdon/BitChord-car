@@ -152,7 +152,7 @@ class CarBridgeService : Service() {
                         if (!res.isSuccessful) {
                             call.respond(HttpStatusCode.BadGateway)
                         } else {
-                            val bytes = res.body?.bytes().orEmpty()
+                            val bytes = res.body?.bytes() ?: ByteArray(0)
                             val type = res.header("Content-Type")
                                 ?.let { runCatching { ContentType.parse(it) }.getOrNull() }
                                 ?: ContentType.Image.JPEG
