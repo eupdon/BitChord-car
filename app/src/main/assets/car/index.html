@@ -1,1 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>BitChord Car</title>
+  <link rel="stylesheet" href="/style.css" />
+  <script>window.CAR_TOKEN = "__TOKEN__";</script>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">BitChord <span>Car</span></div>
+      <div id="status" class="status">connecting…</div>
+    </header>
 
+    <section class="now">
+      <img id="art" alt="album artwork" />
+      <div class="meta">
+        <div id="title" class="title">—</div>
+        <div id="artist" class="artist">—</div>
+      </div>
+
+      <div class="seek">
+        <span id="pos">0:00</span>
+        <div class="track"><div id="bar"></div></div>
+        <span id="dur">0:00</span>
+      </div>
+
+      <div class="transport">
+        <button id="shuffle" class="ghost" aria-label="shuffle">🔀</button>
+        <button id="prev" class="ghost" aria-label="previous">⏮</button>
+        <button id="play" class="primary" aria-label="play or pause">▶</button>
+        <button id="next" class="ghost" aria-label="next">⏭</button>
+        <button id="repeat" class="ghost" aria-label="repeat">↔</button>
+      </div>
+
+      <div class="sub">
+        <button id="like" aria-label="like">♡</button>
+        <button id="voldown" aria-label="volume down">− Vol</button>
+        <button id="volup" aria-label="volume up">Vol +</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>검색</h2>
+      <div class="searchrow">
+        <input id="q" type="search" placeholder="곡, 아티스트, 앨범" autocomplete="off" />
+        <button id="search">검색</button>
+      </div>
+      <div id="results" class="list"></div>
+    </section>
+
+    <section class="panel">
+      <h2>재생목록 <span id="qcount" class="count"></span></h2>
+      <div id="queue" class="list"></div>
+    </section>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
