@@ -398,6 +398,11 @@ dependencies {
     // ---- Discord Rich Presence: the gateway is a WebSocket, so Ktor needs the plugin ----
     implementation("io.ktor:ktor-client-websockets:3.5.2")
 
+    // ---- Car bridge: app sources are reused by TV, so it needs the same server deps ----
+    implementation("io.ktor:ktor-server-core:3.5.2")
+    implementation("io.ktor:ktor-server-cio:3.5.2")
+    implementation("io.ktor:ktor-server-websockets:3.5.2")
+
     // ---- YouTube stream extraction: live-benchmarked client catalog + cipher tiers ----
     implementation("com.github.MetrolistGroup.innertubex:innertubex-android:v0.7.0")
 
