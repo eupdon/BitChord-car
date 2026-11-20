@@ -173,14 +173,16 @@ class CarSessionController(
     }
 
     private fun snapshot(c: MediaController): StateDto {
-        val meta = c.currentMediaItem?.mediaMetadata
+        val currentItem = c.currentMediaItem
+        val meta = currentItem?.mediaMetadata
         val now = System.currentTimeMillis()
 
         val tracks = (0 until c.mediaItemCount).mapNotNull { i ->
-            val m = c.getMediaItemAt(i).mediaMetadata
+            val item = c.getMediaItemAt(i)
+            val m = item.mediaMetadata
             val title = m.title?.toString()
             TrackDto(
-                videoId = m.mediaId.orEmpty(),
+                videoId = item.mediaId.orEmpty(),
                 title = if (title.isNullOrBlank()) "Unknown" else title,
                 artist = m.artist?.toString().orEmpty(),
                 album = m.albumTitle?.toString(),
@@ -203,7 +205,7 @@ class CarSessionController(
             volumeMax = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1),
             track = meta?.let {
                 TrackDto(
-                    videoId = it.mediaId.orEmpty(),
+                    videoId = currentItem?.mediaId.orEmpty(),
                     title = if (trackTitle.isNullOrBlank()) "Unknown" else trackTitle,
                     artist = it.artist?.toString().orEmpty(),
                     album = it.albumTitle?.toString(),

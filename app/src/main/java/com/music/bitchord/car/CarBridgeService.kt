@@ -7,7 +7,6 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.net.NetworkInterface
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -39,6 +38,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import java.net.Inet4Address
+import java.net.NetworkInterface
 import java.util.Locale
 import java.util.UUID
 
@@ -103,7 +103,7 @@ class CarBridgeService : Service() {
                     call.respondText(js, ContentType.Application.JavaScript)
                 }
                 get("/style.css") {
-                    call.respondText(css, ContentType.Text.Css)
+                    call.respondText(css, ContentType.Text.CSS)
                 }
                 webSocket("/ws") {
                     if (call.request.queryParameters["token"] != token) {
