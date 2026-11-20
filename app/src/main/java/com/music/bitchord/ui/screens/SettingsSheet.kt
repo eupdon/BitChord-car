@@ -598,6 +598,12 @@ fun SettingsScreen(
                         WearOsSettingsRow(onClick = onWearOs)
                     }
                 }
+                // Tesla/car web remote: one switch to start/stop the phone-side
+                // HTTP + WebSocket bridge. Kept in its own file so the rest of
+                // this sheet is unchanged upstream.
+                SettingsGroup {
+                    CarBridgeSettingsRow()
+                }
             }
         }
 
