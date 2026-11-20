@@ -205,7 +205,7 @@ class CarSessionController(
             volumeMax = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1),
             track = meta?.let {
                 TrackDto(
-                    videoId = currentItem?.mediaId.orEmpty(),
+                    videoId = currentItem.mediaId.orEmpty(),
                     title = if (trackTitle.isNullOrBlank()) "Unknown" else trackTitle,
                     artist = it.artist?.toString().orEmpty(),
                     album = it.albumTitle?.toString(),

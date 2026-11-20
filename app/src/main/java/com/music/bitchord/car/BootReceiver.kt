@@ -5,17 +5,20 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
 
-/** Starts the bridge after boot and after installing/updating the fork. */
+/** Restarts the bridge after boot or an update, but only when it is switched on. */
 class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
-            ACTION_QUICKBOOT_POWERON -> ContextCompat.startForegroundService(
-                context,
-                Intent(context, CarBridgeService::class.java),
-            )
+            ACTION_QUICKBOOT_POWERON -> {
+                if (!CarBridgeController.isEnabled(context)) return
+                ContextCompat.startForegroundService(
+                    context,
+                    Intent(context, CarBridgeService::class.java),
+                )
+            }
         }
     }
 

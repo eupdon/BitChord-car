@@ -5,7 +5,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
@@ -39,7 +38,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import java.net.Inet4Address
 import java.net.NetworkInterface
-import java.util.Locale
 import java.util.UUID
 
 /**
@@ -99,6 +97,10 @@ class CarBridgeService : Service() {
                 get("/") {
                     call.respondText(html, ContentType.Text.Html)
                 }
+                // Cheap connectivity check: open http://<phone-ip>:8777/health
+                get("/health") {
+                    call.respondText("ok", ContentType.Text.Plain)
+                }
                 get("/app.js") {
                     call.respondText(js, ContentType.Application.JavaScript)
                 }
@@ -144,6 +146,7 @@ class CarBridgeService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            CarBridgeController.markStopped(this)
             stopSelf()
             return START_NOT_STICKY
         }
@@ -202,26 +205,29 @@ class CarBridgeService : Service() {
             .build()
     }
 
-    /** Hotspot address first; fall back to any non-loopback IPv4 interface. */
+    /**
+     * Address a client on the phone's hotspot can actually reach.
+     *
+     * WifiManager.connectionInfo is unreliable in AP mode (often 0, or the
+     * station-side address), so enumerate interfaces and prefer the well-known
+     * soft-AP addresses before any other LAN address. Mobile-data addresses
+     * (10.*) are deliberately last — they are not reachable from the hotspot.
+     */
     private fun phoneIp(): String {
-        @Suppress("DEPRECATION")
-        val address = (getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager)
-            ?.connectionInfo?.ipAddress ?: 0
-        if (address != 0) {
-            return String.format(
-                Locale.US,
-                "%d.%d.%d.%d",
-                address and 0xff,
-                address shr 8 and 0xff,
-                address shr 16 and 0xff,
-                address shr 24 and 0xff,
-            )
-        }
-        return NetworkInterface.getNetworkInterfaces()?.toList()
-            ?.asSequence()
-            ?.flatMap { it.inetAddresses.toList().asSequence() }
-            ?.firstOrNull { !it.isLoopbackAddress && it is Inet4Address }
-            ?.hostAddress
+        val addresses = NetworkInterface.getNetworkInterfaces()?.toList()
+            .orEmpty()
+            .asSequence()
+            .filter { it.isUp }
+            .flatMap { it.inetAddresses.toList().asSequence() }
+            .filterIsInstance<Inet4Address>()
+            .filter { !it.isLoopbackAddress }
+            .map { it.hostAddress }
+            .toList()
+
+        return addresses.firstOrNull { it == "192.168.137.1" || it == "192.168.43.1" }
+            ?: addresses.firstOrNull { it.startsWith("192.168.") }
+            ?: addresses.firstOrNull { !it.startsWith("10.") }
+            ?: addresses.firstOrNull()
             ?: "192.168.43.1"
     }
 
