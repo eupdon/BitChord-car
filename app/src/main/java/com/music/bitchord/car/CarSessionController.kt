@@ -147,6 +147,16 @@ class CarSessionController(
                     SearchDataDto(songs = songs, searchId = id),
                 )
             }
+            "home" -> CarJson.codec.encodeToJsonElement(
+                HomeDataDto.serializer(),
+                CarHomeGateway.load(),
+            )
+            "home.play" -> {
+                val song = CarHomeGateway.playable(p.int("shelf"), p.int("item"))
+                    ?: error("홈 피드가 만료되었습니다")
+                requireController().playSongs(listOf(song), 0)
+                null
+            }
             "player.play", "player.pause", "player.toggle", "player.next",
             "player.previous", "player.shuffle", "player.repeat", "player.like" -> {
                 execute(CommandDto(id = call.id, name = call.method.removePrefix("player.")))

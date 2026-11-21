@@ -165,3 +165,28 @@ data class LyricsDataDto(
     val source: String = "",
     val lines: List<LyricsLineDto> = emptyList(),
 )
+
+/** One card in a Home shelf. [videoId] is empty for browse-only cards. */
+@Serializable
+data class HomeItemDto(
+    val title: String = "",
+    val subtitle: String = "",
+    val thumbnailUrl: String? = null,
+    val videoId: String = "",
+    val isVideo: Boolean = false,
+)
+
+/** A Home row, laid out the way the app's shelf would draw it. */
+@Serializable
+data class HomeShelfDto(
+    val title: String = "",
+    val subtitle: String = "",
+    val layout: String = "CARDS",
+    val items: List<HomeItemDto> = emptyList(),
+)
+
+/** The phone's personalised Home feed, assembled where the session lives. */
+@Serializable
+data class HomeDataDto(
+    val shelves: List<HomeShelfDto> = emptyList(),
+)
