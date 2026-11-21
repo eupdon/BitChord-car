@@ -79,7 +79,8 @@
             <span class="hint" id="searchHint">폰에서 검색합니다</span>
           </div>
           <div class="chips" id="searchChips">
-            <button class="chip active" data-filter="SONGS">곡</button>
+            <button class="chip active" data-filter="ALL">전체</button>
+            <button class="chip" data-filter="SONGS">곡</button>
             <button class="chip" data-filter="ARTISTS">아티스트</button>
             <button class="chip" data-filter="ALBUMS">앨범</button>
             <button class="chip" data-filter="PLAYLISTS">플레이리스트</button>
@@ -99,9 +100,10 @@
           </div>
         </section>
 
-        <section class="page" data-page="playlist">
-          <div class="playlist-head" id="playlistHead"></div>
-          <div class="track-list" id="playlistTracks"></div>
+        <!-- album / artist / playlist / podcast / device playlist -->
+        <section class="page" data-page="detail">
+          <div class="playlist-head" id="detailHead"></div>
+          <div class="track-list" id="detailTracks"></div>
         </section>
       </div>
     </main>

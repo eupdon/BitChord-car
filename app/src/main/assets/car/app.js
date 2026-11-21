@@ -15,10 +15,11 @@
     page: 'home', prevPage: 'home',
     home: [], homeLoading: false,
     search: {
-      songs: [], searchId: null, query: '', filter: 'SONGS',
+      songs: [], searchId: null, query: '', filter: 'ALL',
       top: null, sections: [], recents: [],
     },
-    library: [], libraryLoading: false, playlist: null,
+    library: [], libraryLoading: false,
+    detail: null,
     lyrics: { lines: [], videoId: '', source: '' },
     lyricNodes: [], activeLyric: -1,
     sheetOpen: false, sheetTab: 'lyrics',
@@ -57,7 +58,7 @@
           S.pending[id].reject(new Error('응답이 없습니다'));
           delete S.pending[id];
         }
-      }, ['lyrics.get', 'home', 'library', 'search.detailed', 'play.item'].indexOf(method) >= 0
+      }, ['lyrics.get', 'home', 'library', 'search.detailed', 'play.item', 'detail'].indexOf(method) >= 0
         ? 30000 : 15000);
     });
   }
@@ -223,6 +224,13 @@
         card.appendChild(subEl);
         if (playable) {
           card.onclick = function () { act('home.play', { shelf: si, item: ii }); };
+        } else if (item.browseId) {
+          card.onclick = function () {
+            openDetail({
+              kind: 'browse', id: item.browseId,
+              title: item.title, subtitle: item.subtitle, thumbnailUrl: item.thumbnailUrl,
+            }, 'home');
+          };
         }
         row.appendChild(card);
       });
@@ -320,11 +328,16 @@
     return card;
   }
 
-  /** A search/library item is either played from the cached result set or browsed on the phone. */
-  function playItem(item) {
+  /**
+   * Only a real track starts playback. Every other card opens a detail page on
+   * the phone first; the collection is never turned into a queue by a tap.
+   */
+  function playItem(item, from) {
     if (!item || !item.id) return;
-    if (item.kind === 'local') {
-      openPlaylist(item.id, item.title);
+    const kind = item.kind || 'song';
+    if (kind === 'local' || kind === 'browse' || kind === 'album' ||
+        kind === 'artist' || kind === 'playlist' || kind === 'podcast' || kind === 'other') {
+      openDetail(item, from);
       return;
     }
     if (item.playIndex >= 0 && S.search.searchId && S.search.query) {
@@ -332,7 +345,7 @@
       return;
     }
     act('play.item', {
-      kind: item.kind, id: item.id,
+      kind: kind, id: item.id,
       title: item.title, artist: item.subtitle,
       thumbnailUrl: item.thumbnailUrl,
     });
@@ -378,7 +391,7 @@
       top.querySelector('.tr-title').textContent = s.top.title || '';
       top.querySelector('.tr-sub').textContent = s.top.subtitle || '';
       setArt(top.querySelector('img'), s.top.thumbnailUrl);
-      top.onclick = function () { playItem(s.top); };
+      top.onclick = function () { playItem(s.top, 'search'); };
       box.appendChild(top);
     }
 
@@ -398,7 +411,7 @@
         const list = document.createElement('div');
         list.className = 'track-list';
         rows.forEach(function (item, i) {
-          list.appendChild(makeRow(item, i, function () { playItem(item); }));
+          list.appendChild(makeRow(item, i, function () { playItem(item, 'search'); }));
         });
         sec.appendChild(list);
       }
@@ -406,7 +419,7 @@
         const grid = document.createElement('div');
         grid.className = 'result-grid';
         cards.forEach(function (item) {
-          grid.appendChild(makeCard(item, function () { playItem(item); }));
+          grid.appendChild(makeCard(item, function () { playItem(item, 'search'); }));
         });
         sec.appendChild(grid);
       }
@@ -482,14 +495,14 @@
         const list = document.createElement('div');
         list.className = 'track-list';
         section.items.forEach(function (item, i) {
-          list.appendChild(makeRow(item, i, function () { playItem(item); }));
+          list.appendChild(makeRow(item, i, function () { playItem(item, 'library'); }));
         });
         sec.appendChild(list);
       } else {
         const grid = document.createElement('div');
         grid.className = 'library-grid';
         section.items.forEach(function (item) {
-          grid.appendChild(makeCard(item, function () { playItem(item); }));
+          grid.appendChild(makeCard(item, function () { playItem(item, 'library'); }));
         });
         sec.appendChild(grid);
       }
@@ -497,36 +510,94 @@
     });
   }
 
-  async function openPlaylist(id, title) {
-    S.playlist = { id: id, title: title || '플레이리스트', songs: [] };
-    goto('playlist');
-    $('playlistHead').innerHTML =
-      '<img alt="" /><div><div class="eyebrow">플레이리스트</div><h1></h1><div class="pl-meta"></div>' +
-      '<button class="pill-btn" id="playAll">' + ico('play') + '<span>모두 재생</span></button></div>';
-    $('playlistHead').querySelector('h1').textContent = S.playlist.title;
-    $('playlistHead').querySelector('.pl-meta').textContent = '폰에서 불러오는 중…';
-    $('playlistHead').querySelector('#playAll').onclick = function () {
-      act('playlist.play', { id: S.playlist.id, index: 0 });
+  function detailLabel(kind) {
+    if (kind === 'album') return '앨범';
+    if (kind === 'artist') return '아티스트';
+    if (kind === 'podcast') return '팟캐스트';
+    if (kind === 'browse' || kind === 'other') return '컬렉션';
+    return '플레이리스트';
+  }
+
+  function renderDetail() {
+    const d = S.detail;
+    if (!d) return;
+    const head = $('detailHead');
+    head.textContent = '';
+    const img = document.createElement('img');
+    img.alt = '';
+    setArt(img, d.artwork);
+    const info = document.createElement('div');
+    const eyebrow = document.createElement('div');
+    eyebrow.className = 'eyebrow';
+    eyebrow.textContent = detailLabel(d.kind);
+    const title = document.createElement('h1');
+    title.textContent = d.title || '컬렉션';
+    const meta = document.createElement('div');
+    meta.className = 'pl-meta';
+    const countText = d.songs.length + '곡';
+    meta.textContent = !d.key ? '폰에서 불러오는 중…'
+      : d.message ? d.message
+        : d.subtitle ? (d.subtitle + ' · ' + countText) : countText;
+    const play = document.createElement('button');
+    play.className = 'pill-btn detail-play';
+    play.innerHTML = ico('play') + '<span>모두 재생</span>';
+    play.disabled = !d.key || !d.songs.length;
+    play.onclick = function () { act('detail.play', { key: d.key, index: 0 }); };
+    info.appendChild(eyebrow);
+    info.appendChild(title);
+    info.appendChild(meta);
+    info.appendChild(play);
+    head.appendChild(img);
+    head.appendChild(info);
+
+    const box = $('detailTracks');
+    box.textContent = '';
+    if (!d.key) {
+      box.innerHTML = '<div class="empty">폰에서 곡을 불러오는 중…</div>';
+      return;
+    }
+    if (!d.songs.length) {
+      box.innerHTML = '<div class="empty">' + (d.message || '곡이 없습니다.') + '</div>';
+      return;
+    }
+    d.songs.forEach(function (song, i) {
+      box.appendChild(makeRow(song, i, function () {
+        act('detail.play', { key: d.key, index: i });
+      }));
+    });
+  }
+
+  /** A card opens a second page; it never starts playback on its own. */
+  async function openDetail(item, from) {
+    if (!item || !item.id) return;
+    const requested = {
+      key: '', kind: item.kind || 'browse', id: item.id,
+      title: item.title || '컬렉션', subtitle: item.subtitle || '',
+      artwork: item.thumbnailUrl || item.artwork || null,
+      songs: [], message: null, from: from || 'library',
     };
-    $('playlistTracks').innerHTML = '<div class="empty">불러오는 중…</div>';
+    S.detail = requested;
+    goto('detail');
+    renderDetail();
     try {
-      const data = await call('playlist.tracks', { id: id });
-      S.playlist.songs = data.songs || [];
-      $('playlistHead').querySelector('.pl-meta').textContent = S.playlist.songs.length + '곡';
-      const box = $('playlistTracks');
-      box.textContent = '';
-      if (!S.playlist.songs.length) {
-        box.innerHTML = '<div class="empty">곡이 없습니다.</div>';
-        return;
-      }
-      S.playlist.songs.forEach(function (song, i) {
-        box.appendChild(makeRow(song, i, function () {
-          act('playlist.play', { id: S.playlist.id, index: i });
-        }));
+      const data = await call('detail', {
+        kind: requested.kind, id: requested.id,
+        title: requested.title, subtitle: requested.subtitle,
+        artwork: requested.artwork || '',
       });
+      if (S.detail !== requested) return; // a different card was opened meanwhile
+      requested.key = data.key || '';
+      requested.title = data.title || requested.title;
+      requested.subtitle = data.subtitle || requested.subtitle;
+      requested.artwork = data.artwork || requested.artwork;
+      requested.songs = data.songs || [];
+      requested.message = data.message || null;
+      renderDetail();
     } catch (e) {
-      $('playlistTracks').innerHTML = '<div class="empty">불러오지 못했습니다.</div>';
-      toast(e && e.message ? e.message : '플레이리스트 오류');
+      if (S.detail !== requested) return;
+      requested.message = '불러오지 못했습니다';
+      renderDetail();
+      toast(e && e.message ? e.message : '목록을 불러오지 못했습니다');
     }
   }
 
@@ -695,11 +766,18 @@
     document.querySelectorAll('.page').forEach(function (p) {
       p.classList.toggle('active', p.dataset.page === page);
     });
-    const navPage = page === 'playlist' ? 'library' : page;
+    let navPage = page;
+    if (page === 'detail') {
+      navPage = (S.detail && (S.detail.from === 'search' || S.detail.from === 'home'))
+        ? S.detail.from : 'library';
+    }
     document.querySelectorAll('.nav-item').forEach(function (b) {
       b.classList.toggle('active', b.dataset.page === navPage);
     });
-    const names = { home: '홈', search: '검색', library: '라이브러리', playlist: '플레이리스트' };
+    const names = {
+      home: '홈', search: '검색', library: '라이브러리',
+      detail: S.detail ? (S.detail.title || '상세') : '상세',
+    };
     $('crumb').textContent = names[page] || 'BitChord';
     $('main').scrollTop = 0;
     if (page === 'home' && !S.home.length && !S.homeLoading) loadHome();
@@ -786,7 +864,7 @@
       b.onclick = function () { goto(b.dataset.page); };
     });
     $('backBtn').onclick = function () {
-      if (S.page === 'playlist') goto('library');
+      if (S.page === 'detail') goto((S.detail && S.detail.from) || 'library');
       else goto('home');
     };
 
