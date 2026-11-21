@@ -58,7 +58,7 @@
           S.pending[id].reject(new Error('응답이 없습니다'));
           delete S.pending[id];
         }
-      }, ['lyrics.get', 'home', 'library', 'search.detailed', 'play.item', 'detail'].indexOf(method) >= 0
+      }, ['lyrics.get', 'home', 'library', 'search.detailed', 'play.item', 'player.playStation', 'detail'].indexOf(method) >= 0
         ? 30000 : 15000);
     });
   }
@@ -344,6 +344,16 @@
     if (kind === 'local' || kind === 'browse' || kind === 'album' ||
         kind === 'artist' || kind === 'playlist' || kind === 'podcast' || kind === 'other') {
       openDetail(item, from);
+      return;
+    }
+    // A song picked from search leads a station: only that song plus its own
+    // related tracks go into the queue, never the whole result list.
+    if (from === 'search') {
+      act('player.playStation', {
+        kind: kind, id: item.id,
+        title: item.title, artist: item.subtitle,
+        thumbnailUrl: item.thumbnailUrl, durationText: item.durationText,
+      });
       return;
     }
     if (item.playIndex >= 0 && S.search.searchId && S.search.query) {
