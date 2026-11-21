@@ -1,6 +1,7 @@
 /*
- * BitChord car UI. Thin client only: every search, lyric, playlist and queue
- * edit is an RPC call to the phone. Nothing here talks to an outside service.
+ * BitChord car UI. Thin client only: every search, lyric, playlist, queue edit
+ * and home-feed read is an RPC call to the phone. Nothing here talks to an
+ * outside service or holds playback state of its own.
  */
 (function () {
   'use strict';
@@ -11,13 +12,13 @@
   const S = {
     ws: null, seq: 0, pending: {}, delay: 500, connected: false,
     state: null,
-    page: 'now', prevPage: 'now',
+    page: 'home', prevPage: 'home',
+    home: [], homeLoading: false,
     search: { songs: [], searchId: null, query: '' },
     playlists: [], playlist: null,
     lyrics: { lines: [], videoId: '', source: '' },
     lyricNodes: [], activeLyric: -1,
-    panelOpen: false, panelTab: 'lyrics',
-    fullscreen: false,
+    sheetOpen: false, sheetTab: 'lyrics',
     seekEditing: false, volEditing: false, dragFrom: -1,
     lastQueueSig: '', lastLyricTrack: '',
     toastTimer: null, searchTimer: null,
@@ -53,7 +54,7 @@
           S.pending[id].reject(new Error('응답이 없습니다'));
           delete S.pending[id];
         }
-      }, method === 'lyrics.get' ? 30000 : 15000);
+      }, method === 'lyrics.get' || method === 'home' ? 30000 : 15000);
     });
   }
 
@@ -72,6 +73,7 @@
       S.delay = 500;
       setStatus('폰에 연결됨', true, false);
       $('banner').classList.add('hidden');
+      loadHome();
       refreshPlaylists();
     };
 
@@ -151,6 +153,71 @@
     return (s.queue || []).map(function (t) { return t.videoId + '|' + t.title; }).join('~~') + '#' + s.queueIndex;
   }
 
+  // ---- home --------------------------------------------------------------
+  async function loadHome() {
+    if (S.homeLoading) return;
+    S.homeLoading = true;
+    try {
+      const data = await call('home');
+      S.home = data.shelves || [];
+      renderHome();
+    } catch (e) {
+      $('homeShelves').innerHTML =
+        '<div class="empty">홈 피드를 불러오지 못했습니다.<br>폰의 YouTube Music 연결을 확인해 주세요.</div>';
+    } finally {
+      S.homeLoading = false;
+    }
+  }
+
+  function renderHome() {
+    const box = $('homeShelves');
+    box.textContent = '';
+    if (!S.home.length) {
+      box.innerHTML = '<div class="empty">표시할 홈 피드가 없습니다.</div>';
+      return;
+    }
+    S.home.forEach(function (shelf, si) {
+      const sec = document.createElement('div');
+      sec.className = 'shelf';
+      const title = document.createElement('div');
+      title.className = 'shelf-title';
+      title.textContent = shelf.title || '추천';
+      sec.appendChild(title);
+      if (shelf.subtitle) {
+        const sub = document.createElement('div');
+        sub.className = 'shelf-sub';
+        sub.textContent = shelf.subtitle;
+        sec.appendChild(sub);
+      }
+      const row = document.createElement('div');
+      const layout = shelf.layout || 'CARDS';
+      row.className = 'shelf-row' + (layout === 'LIST' ? ' list' : layout === 'VIDEO' ? ' video' : '');
+      (shelf.items || []).forEach(function (item, ii) {
+        const card = document.createElement('div');
+        const playable = !!item.videoId;
+        card.className = 'shelf-card' + (playable ? '' : ' disabled');
+        const img = document.createElement('img');
+        img.alt = '';
+        setArt(img, item.thumbnailUrl);
+        card.appendChild(img);
+        const name = document.createElement('div');
+        name.className = 'sc-name';
+        name.textContent = item.title || '';
+        card.appendChild(name);
+        const subEl = document.createElement('div');
+        subEl.className = 'sc-sub';
+        subEl.textContent = item.subtitle || '';
+        card.appendChild(subEl);
+        if (playable) {
+          card.onclick = function () { act('home.play', { shelf: si, item: ii }); };
+        }
+        row.appendChild(card);
+      });
+      sec.appendChild(row);
+      box.appendChild(sec);
+    });
+  }
+
   // ---- player rendering --------------------------------------------------
   function renderPlayer() {
     const s = S.state;
@@ -159,28 +226,22 @@
     const title = t.title || '—';
     const sub = t.artist || t.album || '';
 
-    $('heroTitle').textContent = title;
-    $('heroArtist').textContent = sub;
-    $('heroAlbum').textContent = t.album && t.artist ? t.album : '';
     $('pillTitle').textContent = title;
     $('pillArtist').textContent = sub;
-    $('fsTitle').textContent = title;
-    $('fsArtist').textContent = sub;
+    $('psTitle').textContent = title;
+    $('psArtist').textContent = sub;
 
-    setArt($('heroArt'), t.artwork);
     setArt($('pillArtImg'), t.artwork);
-    setArt($('fsArt'), t.artwork);
+    setArt($('psArt'), t.artwork);
     const bg = artUrl(t.artwork);
-    $('fsBg').style.backgroundImage = bg ? 'url("' + bg + '")' : 'none';
+    $('psBg').style.backgroundImage = bg ? 'url("' + bg + '")' : 'none';
 
     const iconName = s.playing ? 'pause' : 'play';
-    ['play', 'pillPlay', 'fsPlay'].forEach(function (id) { setUse($(id), iconName); });
+    ['pillPlay', 'psPlay'].forEach(function (id) { setUse($(id), iconName); });
 
-    ['shuffle', 'pillShuffle', 'fsShuffle'].forEach(function (id) {
-      $(id).classList.toggle('on', !!s.shuffle);
-    });
+    ['pillShuffle', 'psShuffle'].forEach(function (id) { $(id).classList.toggle('on', !!s.shuffle); });
     const repeatIcon = s.repeatMode === 1 ? 'repeat-one' : 'repeat';
-    ['repeat', 'pillRepeat', 'fsRepeat'].forEach(function (id) {
+    ['pillRepeat', 'psRepeat'].forEach(function (id) {
       setUse($(id), repeatIcon);
       $(id).classList.toggle('on', (s.repeatMode || 0) !== 0);
     });
@@ -188,15 +249,10 @@
     const pos = position();
     const dur = duration();
     const ratio = dur > 0 ? pos / dur : 0;
-    if (!S.seekEditing) {
-      $('seek').value = String(Math.round(ratio * 1000));
-      $('fsSeek').value = String(Math.round(ratio * 1000));
-    }
+    if (!S.seekEditing) $('psSeek').value = String(Math.round(ratio * 1000));
     $('pillBar').style.width = (ratio * 100) + '%';
-    $('heroPos').textContent = fmt(pos);
-    $('heroDur').textContent = fmt(dur);
-    $('fsPos').textContent = fmt(pos);
-    $('fsDur').textContent = fmt(dur);
+    $('psPos').textContent = fmt(pos);
+    $('psDur').textContent = fmt(dur);
 
     if (!S.volEditing) {
       const vol = $('volume');
@@ -205,17 +261,15 @@
     }
 
     const count = (s.queue || []).length;
-    $('heroQueueCount').textContent = '(' + count + ')';
-    $('panelQueueCount').textContent = '(' + count + ')';
+    $('psQueueCount').textContent = '(' + count + ')';
 
     const sig = queueSig();
     if (sig !== S.lastQueueSig) {
       S.lastQueueSig = sig;
       renderQueue();
-      renderMiniQueue();
     }
 
-    if (S.panelOpen && S.panelTab === 'lyrics') {
+    if (S.sheetOpen && S.sheetTab === 'lyrics') {
       const vid = (t && t.videoId) || '';
       if (vid && vid !== S.lastLyricTrack) {
         S.lastLyricTrack = vid;
@@ -226,43 +280,20 @@
   }
 
   // ---- track rows --------------------------------------------------------
-  function makeRow(track, index, onClick, actions) {
+  function makeRow(track, index, onClick) {
     const row = document.createElement('div');
     row.className = 'track-row';
     row.innerHTML =
       '<div class="idx">' + (index + 1) + '</div>' +
       '<img alt="" />' +
       '<div class="t"><div class="t-name"></div><div class="t-sub"></div></div>' +
-      '<div class="dur"></div>' +
-      '<div class="row-actions"></div>';
+      '<div class="dur"></div>';
     row.querySelector('.t-name').textContent = track.title || '?';
     row.querySelector('.t-sub').textContent = track.artist || '';
     row.querySelector('.dur').textContent = track.durationText || '';
     setArt(row.querySelector('img'), track.thumbnailUrl || track.artwork);
     row.onclick = onClick;
-
-    const box = row.querySelector('.row-actions');
-    (actions || []).forEach(function (a) {
-      const b = document.createElement('button');
-      b.title = a.title;
-      b.innerHTML = ico(a.icon);
-      if (a.danger) b.classList.add('danger');
-      b.onclick = function (e) { e.stopPropagation(); a.run(); };
-      box.appendChild(b);
-    });
     return row;
-  }
-
-  function renderMiniQueue() {
-    const box = $('heroQueue');
-    box.textContent = '';
-    const s = S.state;
-    const rows = (s && s.queue) || [];
-    rows.slice(0, 4).forEach(function (t, i) {
-      const row = makeRow(t, i, function () { act('player.skipTo', { index: i }); }, null);
-      if (i === s.queueIndex) row.classList.add('active');
-      box.appendChild(row);
-    });
   }
 
   function renderResults() {
@@ -276,7 +307,7 @@
     songs.forEach(function (song, i) {
       box.appendChild(makeRow(song, i, function () {
         act('player.playSearch', { searchId: S.search.searchId, index: i });
-      }, null));
+      }));
     });
   }
 
@@ -354,7 +385,7 @@
       S.playlist.songs.forEach(function (song, i) {
         box.appendChild(makeRow(song, i, function () {
           act('playlist.play', { id: S.playlist.id, index: i });
-        }, null));
+        }));
       });
     } catch (e) {
       $('playlistTracks').innerHTML = '<div class="empty">불러오지 못했습니다.</div>';
@@ -362,9 +393,9 @@
     }
   }
 
-  // ---- side panel: queue -------------------------------------------------
+  // ---- raised player: queue tab -------------------------------------------
   function renderQueue() {
-    const box = $('queueView');
+    const box = $('psQueue');
     box.textContent = '';
     const s = S.state;
     const rows = (s && s.queue) || [];
@@ -411,7 +442,7 @@
     });
   }
 
-  // ---- side panel: lyrics ------------------------------------------------
+  // ---- raised player: lyrics tab ------------------------------------------
   function wordProgress(w, pos) {
     if (pos <= w.startMs) return 0;
     if (pos >= w.endMs) return 1;
@@ -432,7 +463,7 @@
   }
 
   function renderLyrics() {
-    const box = $('lyricsView');
+    const box = $('psLyrics');
     box.textContent = '';
     S.lyricNodes = [];
     S.activeLyric = -1;
@@ -451,7 +482,6 @@
       el.className = 'lyric-line' + (line.text ? '' : ' gap');
       const spans = [];
       if (line.text && line.words && line.words.length) {
-        // Walk the source text so the spaces between timed words survive.
         let offset = 0;
         (line.words || []).forEach(function (w) {
           const at = line.text.indexOf(w.text, offset);
@@ -485,7 +515,7 @@
       S.activeLyric = active;
       const node = S.lyricNodes[active];
       if (node) {
-        const box = $('lyricsView');
+        const box = $('psLyrics');
         box.scrollTo({
           top: Math.max(0, node.el.offsetTop - box.clientHeight / 2 + node.el.offsetHeight / 2),
           behavior: 'smooth',
@@ -503,7 +533,7 @@
   }
 
   async function loadLyrics() {
-    const box = $('lyricsView');
+    const box = $('psLyrics');
     box.innerHTML = '<div class="empty">폰에서 가사를 불러오는 중…</div>';
     S.lyricNodes = [];
     S.activeLyric = -1;
@@ -521,7 +551,7 @@
     }
   }
 
-  // ---- navigation --------------------------------------------------------
+  // ---- navigation & raised sheet -----------------------------------------
   function goto(page) {
     S.prevPage = S.page;
     S.page = page;
@@ -532,18 +562,19 @@
     document.querySelectorAll('.nav-item').forEach(function (b) {
       b.classList.toggle('active', b.dataset.page === navPage);
     });
-    const names = { now: '지금 재생', search: '검색', library: '라이브러리', playlist: '플레이리스트' };
+    const names = { home: '홈', search: '검색', library: '라이브러리', playlist: '플레이리스트' };
     $('crumb').textContent = names[page] || 'BitChord';
     $('main').scrollTop = 0;
+    if (page === 'home' && !S.home.length && !S.homeLoading) loadHome();
   }
 
-  function setPanelTab(tab) {
-    S.panelTab = tab;
-    document.querySelectorAll('.tab').forEach(function (b) {
+  function setSheetTab(tab) {
+    S.sheetTab = tab;
+    document.querySelectorAll('#psTabs .tab').forEach(function (b) {
       b.classList.toggle('active', b.dataset.tab === tab);
     });
-    $('lyricsView').classList.toggle('hidden', tab !== 'lyrics');
-    $('queueView').classList.toggle('hidden', tab !== 'queue');
+    $('psLyrics').classList.toggle('hidden', tab !== 'lyrics');
+    $('psQueue').classList.toggle('hidden', tab !== 'queue');
     if (tab === 'lyrics') {
       const vid = S.state && S.state.track && S.state.track.videoId || '';
       if (vid !== S.lastLyricTrack || !S.lyricNodes.length) {
@@ -553,35 +584,24 @@
     } else renderQueue();
   }
 
-  function openPanel(tab) {
-    S.panelOpen = true;
-    $('app').classList.add('panel-open');
-    $('panel').classList.remove('hidden');
-    setPanelTab(tab || S.panelTab);
+  function openSheet(tab) {
+    S.sheetOpen = true;
+    $('playerSheet').classList.add('open');
+    $('playerSheet').setAttribute('aria-hidden', 'false');
+    setSheetTab(tab || S.sheetTab);
   }
 
-  function closePanel() {
-    S.panelOpen = false;
-    $('app').classList.remove('panel-open');
-    $('panel').classList.add('hidden');
-  }
-
-  function setFullscreen(open) {
-    S.fullscreen = open;
-    $('fullscreen').classList.toggle('hidden', !open);
-    if (open) renderPlayer();
+  function closeSheet() {
+    S.sheetOpen = false;
+    $('playerSheet').classList.remove('open');
+    $('playerSheet').setAttribute('aria-hidden', 'true');
   }
 
   // ---- bindings ----------------------------------------------------------
-  function bind(id, method, params) {
+  function bind(id, method) {
     const el = $(id);
     if (!el) return;
-    el.onclick = function () {
-      if (method === 'toggleFullscreen') setFullscreen(!S.fullscreen);
-      else if (method === 'closeFullscreen') setFullscreen(false);
-      else if (method === 'togglePanel') S.panelOpen ? closePanel() : openPanel(params);
-      else act(method, typeof params === 'function' ? params() : params);
-    };
+    el.onclick = function () { act(method); };
   }
 
   function bindSeek(id) {
@@ -608,29 +628,27 @@
   }
 
   function bindAll() {
-    ['play', 'pillPlay', 'fsPlay'].forEach(function (id) { bind(id, 'player.toggle'); });
-    ['prev', 'pillPrev', 'fsPrev'].forEach(function (id) { bind(id, 'player.previous'); });
-    ['next', 'pillNext', 'fsNext'].forEach(function (id) { bind(id, 'player.next'); });
-    ['shuffle', 'pillShuffle', 'fsShuffle'].forEach(function (id) { bind(id, 'player.shuffle'); });
-    ['repeat', 'pillRepeat', 'fsRepeat'].forEach(function (id) { bind(id, 'player.repeat'); });
-    ['like', 'fsLike'].forEach(function (id) { bind(id, 'player.like'); });
+    ['pillPlay', 'psPlay'].forEach(function (id) { bind(id, 'player.toggle'); });
+    ['pillPrev', 'psPrev'].forEach(function (id) { bind(id, 'player.previous'); });
+    ['pillNext', 'psNext'].forEach(function (id) { bind(id, 'player.next'); });
+    ['pillShuffle', 'psShuffle'].forEach(function (id) { bind(id, 'player.shuffle'); });
+    ['pillRepeat', 'psRepeat'].forEach(function (id) { bind(id, 'player.repeat'); });
+    bind('psLike', 'player.like');
 
-    $('pillArt').onclick = function () { setFullscreen(true); };
-    bind('fsClose', 'closeFullscreen');
-    ['openPanel', 'openLyrics'].forEach(function (id) { $(id).onclick = function () { openPanel('lyrics'); }; });
-    ['openQueue', 'fsQueue'].forEach(function (id) { $(id).onclick = function () { openPanel('queue'); }; });
-    $('fsLyrics').onclick = function () { setFullscreen(false); openPanel('lyrics'); };
-    $('closePanel').onclick = closePanel;
+    ['pillOpen', 'pillUp', 'openSheet'].forEach(function (id) {
+      $(id).onclick = function () { S.sheetOpen ? closeSheet() : openSheet(); };
+    });
+    $('psClose').onclick = closeSheet;
 
-    document.querySelectorAll('.tab').forEach(function (b) {
-      b.onclick = function () { setPanelTab(b.dataset.tab); };
+    document.querySelectorAll('#psTabs .tab').forEach(function (b) {
+      b.onclick = function () { setSheetTab(b.dataset.tab); };
     });
     document.querySelectorAll('.nav-item').forEach(function (b) {
       b.onclick = function () { goto(b.dataset.page); };
     });
     $('backBtn').onclick = function () {
       if (S.page === 'playlist') goto('library');
-      else goto('now');
+      else goto('home');
     };
 
     $('q').addEventListener('input', function () {
@@ -641,8 +659,7 @@
       if (e.key === 'Enter') { clearTimeout(S.searchTimer); doSearch(); }
     });
 
-    bindSeek('seek');
-    bindSeek('fsSeek');
+    bindSeek('psSeek');
     bindVolume();
 
     document.querySelectorAll('img').forEach(function (img) {
@@ -652,7 +669,7 @@
     setInterval(function () {
       if (!S.state) return;
       renderPlayer();
-      if (S.panelOpen && S.panelTab === 'lyrics') updateLyrics();
+      if (S.sheetOpen && S.sheetTab === 'lyrics') updateLyrics();
     }, 250);
   }
 

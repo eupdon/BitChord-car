@@ -12,6 +12,7 @@
 </head>
 <body>
   <svg class="defs" aria-hidden="true">
+    <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9.5 20v-6h5v6"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></symbol>
     <symbol id="i-pause" viewBox="0 0 24 24"><path d="M6.5 4.5h4v15h-4zM13.5 4.5h4v15h-4z" fill="currentColor"/></symbol>
     <symbol id="i-prev" viewBox="0 0 24 24"><path d="M18 5L8 12l10 7zM5 5h2.5v14H5z" fill="currentColor"/></symbol>
@@ -27,7 +28,6 @@
     <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></symbol>
     <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></symbol>
     <symbol id="i-volume" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4zM15 9a5 5 0 010 6M18 6a9 9 0 010 12"/></symbol>
-    <symbol id="i-more" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></symbol>
     <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></symbol>
     <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
@@ -40,7 +40,7 @@
         <span>BitChord</span>
       </div>
       <nav class="nav" id="nav">
-        <button class="nav-item active" data-page="now"><svg class="icon"><use href="#i-note"/></svg><span>지금 재생</span></button>
+        <button class="nav-item active" data-page="home"><svg class="icon"><use href="#i-home"/></svg><span>홈</span></button>
         <button class="nav-item" data-page="search"><svg class="icon"><use href="#i-search"/></svg><span>검색</span></button>
         <button class="nav-item" data-page="library"><svg class="icon"><use href="#i-library"/></svg><span>라이브러리</span></button>
       </nav>
@@ -53,48 +53,22 @@
     <main class="main" id="main">
       <header class="topbar">
         <button class="icon-btn only-narrow" id="backBtn" title="뒤로"><svg class="icon"><use href="#i-back"/></svg></button>
-        <div class="crumb" id="crumb">지금 재생</div>
+        <div class="crumb" id="crumb">홈</div>
         <div class="top-actions">
-          <button class="icon-btn" id="openPanel" title="가사 / 재생목록"><svg class="icon"><use href="#i-list"/></svg></button>
+          <button class="icon-btn" id="openSheet" title="플레이어 열기"><svg class="icon"><use href="#i-up"/></svg></button>
         </div>
       </header>
 
       <div class="pages" id="pages">
-        <section class="page active" data-page="now">
-          <div class="hero" id="hero">
-            <div class="hero-art">
-              <img id="heroArt" alt="album artwork" />
-              <div class="hero-shine"></div>
-            </div>
-            <div class="hero-info">
-              <div class="eyebrow">지금 재생</div>
-              <h1 class="hero-title" id="heroTitle">—</h1>
-              <div class="hero-artist" id="heroArtist">—</div>
-              <div class="hero-album" id="heroAlbum"></div>
-
-              <div class="hero-seek">
-                <span id="heroPos" class="time">0:00</span>
-                <input type="range" id="seek" min="0" max="1000" value="0" aria-label="재생 위치" />
-                <span id="heroDur" class="time">0:00</span>
-              </div>
-
-              <div class="hero-controls">
-                <button class="ctrl" id="shuffle" title="셔플"><svg class="icon"><use href="#i-shuffle"/></svg></button>
-                <button class="ctrl" id="prev" title="이전 곡"><svg class="icon"><use href="#i-prev"/></svg></button>
-                <button class="ctrl play" id="play" title="재생 / 일시정지"><svg class="icon"><use href="#i-play"/></svg></button>
-                <button class="ctrl" id="next" title="다음 곡"><svg class="icon"><use href="#i-next"/></svg></button>
-                <button class="ctrl" id="repeat" title="반복"><svg class="icon"><use href="#i-repeat"/></svg></button>
-              </div>
-
-              <div class="hero-actions">
-                <button class="pill-btn" id="like"><svg class="icon"><use href="#i-heart"/></svg><span>좋아요</span></button>
-                <button class="pill-btn" id="openLyrics"><svg class="icon"><use href="#i-note"/></svg><span>가사</span></button>
-                <button class="pill-btn" id="openQueue"><svg class="icon"><use href="#i-list"/></svg><span>재생목록</span></button>
-              </div>
-            </div>
+        <section class="page active" data-page="home">
+          <div class="home-head">
+            <div class="eyebrow">HOME</div>
+            <h1>오늘의 음악</h1>
+            <div class="home-sub">폰에서 불러온 맞춤 추천과 최근 재생 목록</div>
           </div>
-          <div class="section-title">다음 곡 <span class="muted" id="heroQueueCount"></span></div>
-          <div class="mini-queue" id="heroQueue"></div>
+          <div class="home-shelves" id="homeShelves">
+            <div class="empty">폰에서 홈 피드를 불러오는 중…</div>
+          </div>
         </section>
 
         <section class="page" data-page="search">
@@ -129,26 +103,16 @@
         </section>
       </div>
     </main>
-
-    <aside class="panel hidden" id="panel">
-      <header class="panel-head">
-        <div class="tabs" id="panelTabs">
-          <button class="tab active" data-tab="lyrics">가사</button>
-          <button class="tab" data-tab="queue">재생목록 <span id="panelQueueCount"></span></button>
-        </div>
-        <button class="icon-btn" id="closePanel" title="닫기"><svg class="icon"><use href="#i-close"/></svg></button>
-      </header>
-      <div class="panel-body" id="lyricsView"><div class="empty">재생 중인 곡의 가사를 폰에서 불러옵니다.</div></div>
-      <div class="panel-body hidden" id="queueView"><div class="empty">재생목록이 비어 있습니다.</div></div>
-    </aside>
   </div>
 
   <div class="player-pill" id="playerPill">
-    <button class="pill-art" id="pillArt" title="전체 화면"><img id="pillArtImg" alt="" /></button>
-    <div class="pill-meta">
-      <div class="pill-title" id="pillTitle">—</div>
-      <div class="pill-artist" id="pillArtist">—</div>
-    </div>
+    <button class="pill-open" id="pillOpen" title="플레이어 열기">
+      <span class="pill-art"><img id="pillArtImg" alt="" /></span>
+      <span class="pill-meta">
+        <span class="pill-title" id="pillTitle">—</span>
+        <span class="pill-artist" id="pillArtist">—</span>
+      </span>
+    </button>
     <div class="pill-track"><div id="pillBar"></div></div>
     <div class="pill-controls">
       <button class="mini" id="pillShuffle" title="셔플"><svg class="icon"><use href="#i-shuffle"/></svg></button>
@@ -161,28 +125,45 @@
       <svg class="icon"><use href="#i-volume"/></svg>
       <input type="range" id="volume" min="0" max="15" value="0" aria-label="볼륨" />
     </div>
+    <button class="pill-up" id="pillUp" title="플레이어 열기"><svg class="icon"><use href="#i-up"/></svg></button>
   </div>
 
-  <div class="fullscreen hidden" id="fullscreen">
-    <div class="fs-bg" id="fsBg"></div>
-    <button class="icon-btn fs-close" id="fsClose" title="닫기"><svg class="icon"><use href="#i-close"/></svg></button>
-    <div class="fs-inner">
-      <img id="fsArt" alt="" />
-      <div class="fs-title" id="fsTitle">—</div>
-      <div class="fs-artist" id="fsArtist">—</div>
-      <div class="fs-seek"><input type="range" id="fsSeek" min="0" max="1000" value="0" /><div class="fs-times"><span id="fsPos">0:00</span><span id="fsDur">0:00</span></div></div>
-      <div class="fs-controls">
-        <button class="ctrl" id="fsShuffle"><svg class="icon"><use href="#i-shuffle"/></svg></button>
-        <button class="ctrl" id="fsPrev"><svg class="icon"><use href="#i-prev"/></svg></button>
-        <button class="ctrl play" id="fsPlay"><svg class="icon"><use href="#i-play"/></svg></button>
-        <button class="ctrl" id="fsNext"><svg class="icon"><use href="#i-next"/></svg></button>
-        <button class="ctrl" id="fsRepeat"><svg class="icon"><use href="#i-repeat"/></svg></button>
-      </div>
-      <div class="fs-actions">
-        <button class="pill-btn" id="fsLike"><svg class="icon"><use href="#i-heart"/></svg><span>좋아요</span></button>
-        <button class="pill-btn" id="fsLyrics"><svg class="icon"><use href="#i-note"/></svg><span>가사</span></button>
-        <button class="pill-btn" id="fsQueue"><svg class="icon"><use href="#i-list"/></svg><span>재생목록</span></button>
-      </div>
+  <!-- Bottom player, raised upward: | 플레이어 | 가사(기본) / 재생목록 | -->
+  <div class="player-sheet" id="playerSheet" aria-hidden="true">
+    <div class="ps-bg" id="psBg"></div>
+    <header class="ps-head">
+      <button class="icon-btn" id="psClose" title="닫기"><svg class="icon"><use href="#i-down"/></svg></button>
+      <div class="ps-heading">지금 재생</div>
+    </header>
+    <div class="ps-grid">
+      <section class="ps-player">
+        <img id="psArt" alt="album artwork" />
+        <div class="ps-title" id="psTitle">—</div>
+        <div class="ps-artist" id="psArtist">—</div>
+        <div class="ps-seek">
+          <span id="psPos" class="time">0:00</span>
+          <input type="range" id="psSeek" min="0" max="1000" value="0" aria-label="재생 위치" />
+          <span id="psDur" class="time">0:00</span>
+        </div>
+        <div class="ps-controls">
+          <button class="ctrl" id="psShuffle" title="셔플"><svg class="icon"><use href="#i-shuffle"/></svg></button>
+          <button class="ctrl" id="psPrev" title="이전 곡"><svg class="icon"><use href="#i-prev"/></svg></button>
+          <button class="ctrl play" id="psPlay" title="재생 / 일시정지"><svg class="icon"><use href="#i-play"/></svg></button>
+          <button class="ctrl" id="psNext" title="다음 곡"><svg class="icon"><use href="#i-next"/></svg></button>
+          <button class="ctrl" id="psRepeat" title="반복"><svg class="icon"><use href="#i-repeat"/></svg></button>
+        </div>
+        <div class="ps-actions">
+          <button class="pill-btn" id="psLike"><svg class="icon"><use href="#i-heart"/></svg><span>좋아요</span></button>
+        </div>
+      </section>
+      <section class="ps-side">
+        <div class="tabs" id="psTabs">
+          <button class="tab active" data-tab="lyrics">가사</button>
+          <button class="tab" data-tab="queue">재생목록 <span id="psQueueCount"></span></button>
+        </div>
+        <div class="ps-body" id="psLyrics"><div class="empty">재생 중인 곡의 가사를 폰에서 불러옵니다.</div></div>
+        <div class="ps-body hidden" id="psQueue"><div class="empty">재생목록이 비어 있습니다.</div></div>
+      </section>
     </div>
   </div>
 
