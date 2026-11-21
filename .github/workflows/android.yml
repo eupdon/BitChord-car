@@ -2,6 +2,15 @@ name: Android Release APK
 
 on:
   workflow_dispatch:
+    inputs:
+      build_phone:
+        description: 'bitchord-phone (app)'
+        type: boolean
+        default: true
+      build_wear:
+        description: 'bitchord-wear (wearos)'
+        type: boolean
+        default: true
 
 jobs:
   build-prod-release:
@@ -64,17 +73,34 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Build Signed Prod Release APK
-      run: ./gradlew assembleProdRelease
+    - name: Build selected signed release APKs
+      env:
+        BUILD_PHONE: ${{ inputs.build_phone }}
+        BUILD_WEAR: ${{ inputs.build_wear }}
+      run: |
+        set -euo pipefail
+        TASKS=""
+        if [ "$BUILD_PHONE" = "true" ]; then TASKS="$TASKS :app:assembleProdRelease"; fi
+        if [ "$BUILD_WEAR" = "true" ]; then TASKS="$TASKS :wearos:assembleProdRelease"; fi
+        if [ -z "$TASKS" ]; then
+          echo "::error::No build target selected. Enable bitchord-phone and/or bitchord-wear in the workflow inputs."
+          exit 1
+        fi
+        echo "Gradle tasks:$TASKS"
+        ./gradlew $TASKS
 
-    - name: Upload APK Artifact
+    - name: Upload phone signed APK
+      if: ${{ inputs.build_phone }}
       uses: actions/upload-artifact@v4
       with:
         name: bitchord-prod-release-signed
         path: app/build/outputs/apk/prod/release/*.apk
+        if-no-files-found: error
 
-    - name: Upload Wear OS APK Artifact
+    - name: Upload Wear OS signed APK
+      if: ${{ inputs.build_wear }}
       uses: actions/upload-artifact@v4
       with:
         name: bitchord-wear-prod-release-signed
         path: wearos/build/outputs/apk/prod/release/*.apk
+        if-no-files-found: error
