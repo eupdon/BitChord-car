@@ -24,9 +24,10 @@ data class TrackDto(
 /**
  * Phone -> browser state.
  *
- * [positionAt] is wall-clock millis at which [positionMs] was sampled. The browser
- * extrapolates from it instead of waiting for a tick, and re-syncs on every state
- * frame. This is the same idea WearProtocol uses for its watch.
+ * [positionAt] is the phone's wall-clock time at which [positionMs] was sampled.
+ * It is kept for other thin clients, but the car browser deliberately ignores it:
+ * the two clocks can be tens of seconds apart, so it extrapolates from the time
+ * the frame arrived instead and re-syncs on every state push.
  */
 @Serializable
 data class StateDto(
@@ -105,10 +106,51 @@ data class ErrorDto(
 
 // ---- RPC payloads ---------------------------------------------------------
 
+/** One row in a search or library section: a playable song or a browse card. */
+@Serializable
+data class SearchItemDto(
+    /** `song`, `video`, `artist`, `album`, `playlist`, `other` or `local`. */
+    val kind: String = "song",
+    /** videoId for songs, browseId for cards, playlist id for local cards. */
+    val id: String = "",
+    val title: String = "",
+    val subtitle: String = "",
+    val thumbnailUrl: String? = null,
+    val durationText: String? = null,
+    /** Index into [SearchDataDto.songs] for playable rows; -1 for cards. */
+    val playIndex: Int = -1,
+)
+
+@Serializable
+data class SearchItemListDto(
+    val items: List<SearchItemDto> = emptyList(),
+)
+
+@Serializable
+data class SearchSectionDto(
+    val title: String? = null,
+    val items: List<SearchItemDto> = emptyList(),
+)
+
 @Serializable
 data class SearchDataDto(
     val songs: List<SongDto> = emptyList(),
     val searchId: String? = null,
+    val top: SearchItemDto? = null,
+    val sections: List<SearchSectionDto> = emptyList(),
+)
+
+@Serializable
+data class LibrarySectionDto(
+    val title: String,
+    /** `tracks` for song rows, `cards` for artwork grids. */
+    val kind: String = "cards",
+    val items: List<SearchItemDto> = emptyList(),
+)
+
+@Serializable
+data class LibraryDataDto(
+    val sections: List<LibrarySectionDto> = emptyList(),
 )
 
 @Serializable

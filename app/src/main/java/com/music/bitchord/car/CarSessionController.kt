@@ -14,6 +14,7 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.music.bitchord.playback.ACTION_TOGGLE_FAVORITE
 import com.music.bitchord.playback.PlaybackService
+import com.music.bitchord.data.model.SearchFilter
 import com.music.bitchord.playback.playSongs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -146,6 +147,34 @@ class CarSessionController(
                     SearchDataDto.serializer(),
                     SearchDataDto(songs = songs, searchId = id),
                 )
+            }
+            "search.detailed" -> CarJson.codec.encodeToJsonElement(
+                SearchDataDto.serializer(),
+                CarSearchGateway.detailed(
+                    p.string("query").orEmpty(),
+                    runCatching { SearchFilter.valueOf(p.string("filter").orEmpty()) }
+                        .getOrDefault(SearchFilter.ALL),
+                ),
+            )
+            "search.recents" -> CarJson.codec.encodeToJsonElement(
+                SearchItemListDto.serializer(),
+                SearchItemListDto(CarSearchGateway.recents()),
+            )
+            "library" -> CarJson.codec.encodeToJsonElement(
+                LibraryDataDto.serializer(),
+                CarLibraryGateway.load(),
+            )
+            "play.item" -> {
+                val songs = CarPlayGateway.play(
+                    kind = p.string("kind").orEmpty(),
+                    id = p.string("id").orEmpty(),
+                    title = p.string("title").orEmpty(),
+                    artist = p.string("artist").orEmpty(),
+                    thumbnailUrl = p.string("thumbnailUrl"),
+                )
+                require(songs.isNotEmpty()) { "재생할 곡이 없습니다" }
+                requireController().playSongs(songs, 0)
+                null
             }
             "home" -> CarJson.codec.encodeToJsonElement(
                 HomeDataDto.serializer(),
