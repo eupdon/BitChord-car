@@ -261,6 +261,12 @@
     ['pillPlay', 'psPlay'].forEach(function (id) { setUse($(id), iconName); });
 
     ['pillShuffle', 'psShuffle'].forEach(function (id) { $(id).classList.toggle('on', !!s.shuffle); });
+
+    const liked = !!s.liked;
+    $('psLike').classList.toggle('on', liked);
+    $('psLike').setAttribute('aria-pressed', liked ? 'true' : 'false');
+    setUse($('psLike'), liked ? 'heart-fill' : 'heart');
+
     const repeatIcon = s.repeatMode === 1 ? 'repeat-one' : 'repeat';
     ['pillRepeat', 'psRepeat'].forEach(function (id) {
       setUse($(id), repeatIcon);
@@ -852,7 +858,14 @@
     ['pillNext', 'psNext'].forEach(function (id) { bind(id, 'player.next'); });
     ['pillShuffle', 'psShuffle'].forEach(function (id) { bind(id, 'player.shuffle'); });
     ['pillRepeat', 'psRepeat'].forEach(function (id) { bind(id, 'player.repeat'); });
-    bind('psLike', 'player.like');
+    // Flip the heart at once; the next state frame from the phone confirms it.
+    $('psLike').onclick = function () {
+      if (S.state) {
+        S.state.liked = !S.state.liked;
+        renderPlayer();
+      }
+      act('player.like');
+    };
 
     ['pillOpen', 'pillUp'].forEach(function (id) {
       $(id).onclick = function () { S.sheetOpen ? closeSheet() : openSheet(); };
