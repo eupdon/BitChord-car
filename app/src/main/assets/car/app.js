@@ -15,7 +15,7 @@
     page: 'home', prevPage: 'home',
     home: [], homeLoading: false,
     search: {
-      songs: [], searchId: null, query: '', filter: 'ALL',
+      songs: [], searchId: null, query: '', filter: 'SONGS',
       top: null, sections: [], recents: [],
     },
     library: [], libraryLoading: false, playlist: null,
