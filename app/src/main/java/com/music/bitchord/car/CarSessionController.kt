@@ -12,10 +12,15 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
+import com.music.bitchord.data.OfflinePlaylists
+import com.music.bitchord.data.LikeState
+import com.music.bitchord.data.model.LikeStatus
 import com.music.bitchord.playback.ACTION_TOGGLE_FAVORITE
 import com.music.bitchord.playback.PlaybackService
 import com.music.bitchord.data.model.SearchFilter
 import com.music.bitchord.playback.playSongs
+import com.music.bitchord.playback.toSong
+import com.music.bitchord.widget.MediaWidgetSnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -330,6 +335,24 @@ class CarSessionController(
         }
     }
 
+    /**
+     * The same three sources the notification uses: a device file's like lives
+     * in [OfflinePlaylists], a YouTube track's in the in-memory [LikeState], and
+     * a freshly started process falls back to the persisted widget snapshot.
+     * No network call here — the heart follows the tap immediately.
+     */
+    private fun isLiked(item: MediaItem?): Boolean {
+        if (item == null) return false
+        val id = item.mediaId.orEmpty()
+        if (id.isBlank()) return false
+        val song = runCatching { item.toSong() }.getOrNull()
+        if (song?.localUri != null && OfflinePlaylists.isLiked(song)) return true
+        if (song?.localUri == null && LikeState.overrides.value[id] == LikeStatus.LIKE) return true
+        return runCatching {
+            MediaWidgetSnapshot.load(app).takeIf { it.mediaId == id }?.isLiked == true
+        }.getOrDefault(false)
+    }
+
     private fun snapshot(c: MediaController): StateDto {
         val currentItem = c.currentMediaItem
         val meta = currentItem?.mediaMetadata
@@ -359,6 +382,7 @@ class CarSessionController(
             durationMs = c.duration.takeIf { it > 0L } ?: (meta?.durationMs ?: -1L),
             repeatMode = c.repeatMode,
             shuffle = c.shuffleModeEnabled,
+            liked = isLiked(currentItem),
             volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC),
             volumeMax = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1),
             track = meta?.let {

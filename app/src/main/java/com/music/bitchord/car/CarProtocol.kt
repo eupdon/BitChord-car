@@ -39,6 +39,8 @@ data class StateDto(
     val durationMs: Long = -1L,
     val repeatMode: Int = 0,
     val shuffle: Boolean = false,
+    /** Whether the current track is liked, from the phone's own like state. */
+    val liked: Boolean = false,
     val volume: Int = 0,
     val volumeMax: Int = 15,
     val track: TrackDto? = null,
