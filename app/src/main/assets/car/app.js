@@ -11,11 +11,14 @@
 
   const S = {
     ws: null, seq: 0, pending: {}, delay: 500, connected: false,
-    state: null,
+    state: null, stateAt: 0,
     page: 'home', prevPage: 'home',
     home: [], homeLoading: false,
-    search: { songs: [], searchId: null, query: '' },
-    playlists: [], playlist: null,
+    search: {
+      songs: [], searchId: null, query: '', filter: 'ALL',
+      top: null, sections: [], recents: [],
+    },
+    library: [], libraryLoading: false, playlist: null,
     lyrics: { lines: [], videoId: '', source: '' },
     lyricNodes: [], activeLyric: -1,
     sheetOpen: false, sheetTab: 'lyrics',
@@ -54,7 +57,8 @@
           S.pending[id].reject(new Error('응답이 없습니다'));
           delete S.pending[id];
         }
-      }, method === 'lyrics.get' || method === 'home' ? 30000 : 15000);
+      }, ['lyrics.get', 'home', 'library', 'search.detailed', 'play.item'].indexOf(method) >= 0
+        ? 30000 : 15000);
     });
   }
 
@@ -74,14 +78,18 @@
       setStatus('폰에 연결됨', true, false);
       $('banner').classList.add('hidden');
       loadHome();
-      refreshPlaylists();
+      loadSearchRecents();
+      loadLibrary();
     };
 
     ws.onmessage = function (ev) {
       let m;
       try { m = JSON.parse(ev.data); } catch (e) { return; }
       if (m.type === 'state') {
+        // The phone and the car do not share a clock: sampling the playhead
+        // here, on arrival, avoids its offset leaking into the seek bar.
         S.state = m;
+        S.stateAt = Date.now();
         renderPlayer();
       } else if (m.type === 'result') {
         const p = S.pending[m.id];
@@ -142,7 +150,12 @@
     const s = S.state;
     if (!s) return 0;
     let p = Number(s.positionMs) || 0;
-    if (s.advancing) p += Date.now() - (Number(s.positionAt) || Date.now());
+    if (s.advancing) {
+      // Extrapolate from when this frame arrived in the browser, never from
+      // the phone's `positionAt`: the two clocks can be tens of seconds apart.
+      const elapsed = Date.now() - (S.stateAt || Date.now());
+      if (elapsed > 0 && elapsed < 15000) p += elapsed;
+    }
     const d = duration();
     return d > 0 ? Math.min(p, d) : p;
   }
@@ -289,38 +302,138 @@
       '<div class="t"><div class="t-name"></div><div class="t-sub"></div></div>' +
       '<div class="dur"></div>';
     row.querySelector('.t-name').textContent = track.title || '?';
-    row.querySelector('.t-sub').textContent = track.artist || '';
+    row.querySelector('.t-sub').textContent = track.artist || track.subtitle || '';
     row.querySelector('.dur').textContent = track.durationText || '';
     setArt(row.querySelector('img'), track.thumbnailUrl || track.artwork);
     row.onclick = onClick;
     return row;
   }
 
+  function makeCard(item, onClick) {
+    const card = document.createElement('div');
+    card.className = 'result-card';
+    card.innerHTML = '<img alt="" /><div class="rc-name"></div><div class="rc-sub"></div>';
+    card.querySelector('.rc-name').textContent = item.title || '';
+    card.querySelector('.rc-sub').textContent = item.subtitle || '';
+    setArt(card.querySelector('img'), item.thumbnailUrl);
+    card.onclick = onClick;
+    return card;
+  }
+
+  /** A search/library item is either played from the cached result set or browsed on the phone. */
+  function playItem(item) {
+    if (!item || !item.id) return;
+    if (item.kind === 'local') {
+      openPlaylist(item.id, item.title);
+      return;
+    }
+    if (item.playIndex >= 0 && S.search.searchId && S.search.query) {
+      act('player.playSearch', { searchId: S.search.searchId, index: item.playIndex });
+      return;
+    }
+    act('play.item', {
+      kind: item.kind, id: item.id,
+      title: item.title, artist: item.subtitle,
+      thumbnailUrl: item.thumbnailUrl,
+    });
+  }
+
   function renderResults() {
     const box = $('results');
     box.textContent = '';
-    const songs = S.search.songs;
-    if (!songs.length) {
-      box.innerHTML = '<div class="empty">' + (S.search.query ? '결과가 없습니다.' : '검색어를 입력하세요.') + '</div>';
+    const s = S.search;
+
+    if (!s.query) {
+      if (s.recents.length) {
+        const sec = document.createElement('div');
+        sec.className = 'search-section';
+        sec.innerHTML = '<h2>최근 검색</h2>';
+        const grid = document.createElement('div');
+        grid.className = 'result-grid';
+        s.recents.forEach(function (item) {
+          grid.appendChild(makeCard(item, function () {
+            $('q').value = item.title;
+            doSearch();
+          }));
+        });
+        sec.appendChild(grid);
+        box.appendChild(sec);
+      } else {
+        box.innerHTML = '<div class="empty">검색어를 입력하세요.</div>';
+      }
       return;
     }
-    songs.forEach(function (song, i) {
-      box.appendChild(makeRow(song, i, function () {
-        act('player.playSearch', { searchId: S.search.searchId, index: i });
-      }));
+
+    if (!s.songs.length && !s.sections.length) {
+      box.innerHTML = '<div class="empty">결과가 없습니다.</div>';
+      return;
+    }
+
+    if (s.top) {
+      const top = document.createElement('div');
+      top.className = 'top-result';
+      top.innerHTML =
+        '<img alt="" /><div><div class="tr-kind">Top Result</div>' +
+        '<div class="tr-title"></div><div class="tr-sub"></div></div>';
+      top.querySelector('.tr-title').textContent = s.top.title || '';
+      top.querySelector('.tr-sub').textContent = s.top.subtitle || '';
+      setArt(top.querySelector('img'), s.top.thumbnailUrl);
+      top.onclick = function () { playItem(s.top); };
+      box.appendChild(top);
+    }
+
+    s.sections.forEach(function (section) {
+      const sec = document.createElement('div');
+      sec.className = 'search-section';
+      const h = document.createElement('h2');
+      h.textContent = section.title || '';
+      sec.appendChild(h);
+      const rows = (section.items || []).filter(function (item) {
+        return item.playIndex >= 0 || item.kind === 'song' || item.kind === 'video';
+      });
+      const cards = (section.items || []).filter(function (item) {
+        return item.playIndex < 0 && item.kind !== 'song' && item.kind !== 'video';
+      });
+      if (rows.length) {
+        const list = document.createElement('div');
+        list.className = 'track-list';
+        rows.forEach(function (item, i) {
+          list.appendChild(makeRow(item, i, function () { playItem(item); }));
+        });
+        sec.appendChild(list);
+      }
+      if (cards.length) {
+        const grid = document.createElement('div');
+        grid.className = 'result-grid';
+        cards.forEach(function (item) {
+          grid.appendChild(makeCard(item, function () { playItem(item); }));
+        });
+        sec.appendChild(grid);
+      }
+      box.appendChild(sec);
     });
   }
 
   // ---- search ------------------------------------------------------------
   async function doSearch() {
     const q = $('q').value.trim();
-    if (!q) return;
+    if (!q) {
+      S.search.query = '';
+      S.search.songs = [];
+      S.search.searchId = null;
+      S.search.top = null;
+      S.search.sections = [];
+      renderResults();
+      return;
+    }
     S.search.query = q;
     $('results').innerHTML = '<div class="empty">폰에서 검색하는 중…</div>';
     try {
-      const data = await call('search', { query: q });
-      S.search.songs = (data.songs || []);
+      const data = await call('search.detailed', { query: q, filter: S.search.filter });
+      S.search.songs = data.songs || [];
       S.search.searchId = data.searchId || null;
+      S.search.top = data.top || null;
+      S.search.sections = data.sections || [];
       renderResults();
     } catch (e) {
       $('results').innerHTML = '<div class="empty">검색에 실패했습니다.</div>';
@@ -328,36 +441,60 @@
     }
   }
 
-  // ---- playlists ---------------------------------------------------------
-  function renderPlaylists() {
-    const box = $('playlists');
-    box.textContent = '';
-    if (!S.playlists.length) {
-      box.innerHTML = '<div class="empty">저장된 플레이리스트가 없습니다.</div>';
-      return;
-    }
-    const labels = { local: '저장됨', offline: '기기', spotify: 'Spotify' };
-    S.playlists.forEach(function (p) {
-      const card = document.createElement('div');
-      card.className = 'pl-card';
-      card.innerHTML =
-        '<img alt="" />' +
-        '<span class="pl-badge">' + (labels[p.kind] || '목록') + '</span>' +
-        '<div class="pl-name"></div><div class="pl-sub"></div>';
-      card.querySelector('.pl-name').textContent = p.title || '플레이리스트';
-      card.querySelector('.pl-sub').textContent = p.subtitle || '';
-      setArt(card.querySelector('img'), p.artwork);
-      card.onclick = function () { openPlaylist(p.id, p.title); };
-      box.appendChild(card);
-    });
+  async function loadSearchRecents() {
+    try {
+      const data = await call('search.recents');
+      S.search.recents = data.items || [];
+      if (!S.search.query) renderResults();
+    } catch (e) { /* the empty search state still renders without recents */ }
   }
 
-  async function refreshPlaylists() {
+  // ---- library -----------------------------------------------------------
+  async function loadLibrary() {
+    if (S.libraryLoading) return;
+    S.libraryLoading = true;
     try {
-      const data = await call('playlist.list');
-      S.playlists = data.playlists || [];
-      renderPlaylists();
-    } catch (e) { /* offline: the empty state already explains itself */ }
+      const data = await call('library');
+      S.library = data.sections || [];
+      renderLibrary();
+    } catch (e) {
+      $('librarySections').innerHTML =
+        '<div class="empty">라이브러리를 불러오지 못했습니다.<br>폰의 YouTube Music 연결을 확인해 주세요.</div>';
+    } finally {
+      S.libraryLoading = false;
+    }
+  }
+
+  function renderLibrary() {
+    const box = $('librarySections');
+    box.textContent = '';
+    if (!S.library.length) {
+      box.innerHTML = '<div class="empty">라이브러리가 비어 있습니다.</div>';
+      return;
+    }
+    S.library.forEach(function (section) {
+      const sec = document.createElement('div');
+      sec.className = 'library-section';
+      const h = document.createElement('h2');
+      h.textContent = section.title || '라이브러리';
+      sec.appendChild(h);
+      if (section.kind === 'tracks') {
+        const list = document.createElement('div');
+        list.className = 'track-list';
+        section.items.forEach(function (item, i) {
+          list.appendChild(makeRow(item, i, function () { playItem(item); }));
+        });
+        sec.appendChild(list);
+      } else {
+        const grid = document.createElement('div');
+        grid.className = 'library-grid';
+        section.items.forEach(function (item) {
+          grid.appendChild(makeCard(item, function () { playItem(item); }));
+        });
+        sec.appendChild(grid);
+      }
+      box.appendChild(sec);
+    });
   }
 
   async function openPlaylist(id, title) {
@@ -566,6 +703,8 @@
     $('crumb').textContent = names[page] || 'BitChord';
     $('main').scrollTop = 0;
     if (page === 'home' && !S.home.length && !S.homeLoading) loadHome();
+    if (page === 'search' && !S.search.recents.length) loadSearchRecents();
+    if (page === 'library' && !S.library.length && !S.libraryLoading) loadLibrary();
   }
 
   function setSheetTab(tab) {
@@ -635,7 +774,7 @@
     ['pillRepeat', 'psRepeat'].forEach(function (id) { bind(id, 'player.repeat'); });
     bind('psLike', 'player.like');
 
-    ['pillOpen', 'pillUp', 'openSheet'].forEach(function (id) {
+    ['pillOpen', 'pillUp'].forEach(function (id) {
       $(id).onclick = function () { S.sheetOpen ? closeSheet() : openSheet(); };
     });
     $('psClose').onclick = closeSheet;
@@ -650,6 +789,16 @@
       if (S.page === 'playlist') goto('library');
       else goto('home');
     };
+
+    document.querySelectorAll('#searchChips .chip').forEach(function (chip) {
+      chip.onclick = function () {
+        S.search.filter = chip.dataset.filter;
+        document.querySelectorAll('#searchChips .chip').forEach(function (b) {
+          b.classList.toggle('active', b === chip);
+        });
+        if (S.search.query) doSearch();
+      };
+    });
 
     $('q').addEventListener('input', function () {
       clearTimeout(S.searchTimer);
