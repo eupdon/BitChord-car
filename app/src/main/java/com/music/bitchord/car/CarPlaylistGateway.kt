@@ -73,6 +73,15 @@ object CarPlaylistGateway {
         PlaylistListDto(out)
     }
 
+    /** True for a playlist that lives on this phone rather than on YouTube Music. */
+    fun isLocal(id: String): Boolean =
+        id.startsWith(OfflinePlaylists.PREFIX) ||
+            id.startsWith(SPOTIFY_PAGE_PREFIX) ||
+            id.startsWith("local:playlist:")
+
+    /** The tracks behind a device playlist id, for the shared detail page. */
+    suspend fun songs(id: String): List<Song> = resolve(id)
+
     suspend fun tracks(id: String): SongListDto = withContext(Dispatchers.IO) {
         SongListDto(resolve(id).map { it.toDto() })
     }

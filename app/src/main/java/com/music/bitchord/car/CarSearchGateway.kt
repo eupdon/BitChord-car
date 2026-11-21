@@ -46,8 +46,30 @@ object CarSearchGateway {
         id to songs.map { it.toDto() }
     }
 
+    /** One page attempt, keeping the error so a UI can say why nothing came back. */
+    private class PageResult(val rows: List<SearchResult>, val error: String?) {
+        val ok: Boolean get() = error == null
+    }
+
     /**
-     * The app's result groups, in the car's order: 곡 → 아티스트 → 앨범 →
+     * Prefer the phone's own session: the guest endpoint is rate-limited for
+     * some accounts and answers an otherwise ordinary song search with an
+     * empty page, which the car used to report as "검색 실패". Only fall back to
+     * the guest endpoint when the signed-in call itself fails.
+     */
+    private suspend fun page(query: String, filter: SearchFilter): PageResult {
+        val signedIn = YtMusicRepository.searchPage(query, filter, anonymous = false)
+        signedIn.getOrNull()?.let { return PageResult(it.rows, null) }
+        val guest = YtMusicRepository.searchPage(query, filter, anonymous = true)
+        guest.getOrNull()?.let { return PageResult(it.rows, null) }
+        return PageResult(
+            emptyList(),
+            signedIn.exceptionOrNull()?.message ?: guest.exceptionOrNull()?.message ?: "검색에 실패했습니다",
+        )
+    }
+
+    /**
+     * The app's result groups, in the car's order: 전체 → 곡 → 아티스트 → 앨범 →
      * 플레이리스트. YouTube Music's "Songs" filter still mixes in video uploads
      * on some accounts, so the explicit Videos page is read as well and its rows
      * are appended after the real tracks — music first, videos last.
@@ -56,22 +78,30 @@ object CarSearchGateway {
         val clean = query.trim()
         require(clean.isNotEmpty()) { "검색어가 비어 있습니다" }
 
-        val mainRows = YtMusicRepository.searchPage(clean, filter).getOrNull()?.rows.orEmpty()
-        val videoRows = if (filter == SearchFilter.SONGS) {
-            runCatching {
-                YtMusicRepository.searchPage(clean, SearchFilter.VIDEOS).getOrNull()?.rows.orEmpty()
-            }.getOrDefault(emptyList())
-        } else {
-            emptyList()
-        }
+        val main = page(clean, filter)
+        val rows = main.rows.toMutableList()
 
+        // Videos are music too, but they belong after the real tracks.
+        if (filter == SearchFilter.ALL || filter == SearchFilter.SONGS) {
+            val videos = page(clean, SearchFilter.VIDEOS)
+            if (videos.ok) rows += videos.rows
+        }
+        // A filtered tab whose own rows are empty can still be answered by the
+        // mixed tab — e.g. an artist found only under "All".
+        if (rows.isEmpty() && filter != SearchFilter.ALL) {
+            val all = page(clean, SearchFilter.ALL)
+            if (all.ok) rows += all.rows
+        }
+        if (!main.ok && rows.isEmpty()) throw IllegalStateException(main.error ?: "검색에 실패했습니다")
+
+        val allowBrowse = filter != SearchFilter.SONGS && filter != SearchFilter.VIDEOS
         val pool = mutableListOf<Song>()
         val seenIds = HashSet<String>()
         fun addSong(song: Song) {
             if (song.videoId.isBlank() || !seenIds.add(song.videoId)) return
             if (pool.size < MAX_RESULTS) pool += song
         }
-        (mainRows + videoRows).forEach { row ->
+        rows.forEach { row ->
             when (row) {
                 is SearchResult.TopTrack -> addSong(row.song)
                 is SearchResult.Track -> addSong(row.song)
@@ -83,7 +113,6 @@ object CarSearchGateway {
         val songs = pool.sortedWith(compareBy<Song> { song ->
             if (song.isVideo || song.isVideoOrigin) 1 else 0
         })
-        require(songs.isNotEmpty() || mainRows.any { it is SearchResult.Browse }) { "결과가 없습니다" }
 
         val playable = mutableListOf<Song>()
         val playIndex = HashMap<String, Int>()
@@ -103,7 +132,7 @@ object CarSearchGateway {
         }
 
         var top: SearchItemDto? = null
-        mainRows.forEach { row ->
+        rows.forEach { row ->
             when (row) {
                 is SearchResult.TopTrack -> {
                     if (filter == SearchFilter.ALL && !row.song.isVideo) {
@@ -112,6 +141,7 @@ object CarSearchGateway {
                 }
                 is SearchResult.Track -> Unit
                 is SearchResult.Browse -> {
+                    if (!allowBrowse) return@forEach
                     val group = when (row.item.type) {
                         BrowseType.ARTIST -> "artists"
                         BrowseType.ALBUM -> "albums"

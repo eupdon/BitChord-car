@@ -158,6 +158,23 @@ data class SongListDto(
     val songs: List<SongDto> = emptyList(),
 )
 
+/**
+ * One browse page: a released collection, an artist, a saved playlist or a
+ * device playlist. The browser only ever holds the small DTO and the opaque
+ * [key]; the real track list stays on the phone behind that key.
+ */
+@Serializable
+data class DetailDataDto(
+    val key: String = "",
+    /** `album`, `artist`, `playlist` or `podcast`. Drives the header label. */
+    val kind: String = "playlist",
+    val title: String = "",
+    val subtitle: String = "",
+    val artwork: String? = null,
+    val songs: List<SongDto> = emptyList(),
+    val message: String? = null,
+)
+
 @Serializable
 data class PlaylistDto(
     val id: String,
@@ -208,13 +225,14 @@ data class LyricsDataDto(
     val lines: List<LyricsLineDto> = emptyList(),
 )
 
-/** One card in a Home shelf. [videoId] is empty for browse-only cards. */
+/** One card in a Home shelf. A card is either a track ([videoId]) or a collection ([browseId]). */
 @Serializable
 data class HomeItemDto(
     val title: String = "",
     val subtitle: String = "",
     val thumbnailUrl: String? = null,
     val videoId: String = "",
+    val browseId: String = "",
     val isVideo: Boolean = false,
 )
 

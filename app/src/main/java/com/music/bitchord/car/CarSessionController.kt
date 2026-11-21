@@ -165,8 +165,10 @@ class CarSessionController(
                 CarLibraryGateway.load(),
             )
             "play.item" -> {
+                val kind = p.string("kind").orEmpty()
+                require(kind == "song" || kind == "video") { "앨범·아티스트·플레이리스트는 상세 페이지에서 재생해 주세요" }
                 val songs = CarPlayGateway.play(
-                    kind = p.string("kind").orEmpty(),
+                    kind = kind,
                     id = p.string("id").orEmpty(),
                     title = p.string("title").orEmpty(),
                     artist = p.string("artist").orEmpty(),
@@ -228,6 +230,20 @@ class CarSessionController(
                 LyricsDataDto.serializer(),
                 CarLyricsGateway.current(app, requireController()),
             )
+            "detail" -> CarJson.codec.encodeToJsonElement(
+                DetailDataDto.serializer(),
+                CarDetailGateway.load(
+                    kind = p.string("kind").orEmpty(),
+                    id = p.string("id").orEmpty(),
+                    title = p.string("title").orEmpty(),
+                    subtitle = p.string("subtitle").orEmpty(),
+                    artwork = p.string("artwork"),
+                ),
+            )
+            "detail.play" -> {
+                CarDetailGateway.play(requireController(), p.string("key").orEmpty(), p.int("index"))
+                null
+            }
             "playlist.list" -> CarJson.codec.encodeToJsonElement(
                 PlaylistListDto.serializer(),
                 CarPlaylistGateway.list(),

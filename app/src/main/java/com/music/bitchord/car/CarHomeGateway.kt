@@ -65,6 +65,7 @@ object CarHomeGateway {
         subtitle = subtitle,
         thumbnailUrl = thumbnailUrl,
         videoId = videoId.orEmpty(),
+        browseId = browseId.orEmpty(),
         isVideo = isVideo,
     )
 }
