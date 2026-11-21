@@ -14,7 +14,10 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.music.bitchord.data.OfflinePlaylists
 import com.music.bitchord.data.LikeState
+import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.data.model.LikeStatus
+import com.music.bitchord.data.model.QueueTier
+import com.music.bitchord.data.model.Song
 import com.music.bitchord.playback.ACTION_TOGGLE_FAVORITE
 import com.music.bitchord.playback.PlaybackService
 import com.music.bitchord.data.model.SearchFilter
@@ -33,6 +36,9 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+
+/** How many similar tracks to queue behind a song started from search. */
+private const val MAX_STATION_TRACKS = 25
 
 /**
  * The car bridge's door into the player.
@@ -215,6 +221,42 @@ class CarSessionController(
                         delta = p["delta"]?.jsonPrimitive?.intOrNull,
                     ),
                 )
+                null
+            }
+            "player.playStation" -> {
+                // A song tapped in search starts a station: the tapped track
+                // leads, and YouTube Music's own "up next" for that track fills
+                // the rest of the queue. The search result list is not a queue.
+                val id = p.string("id").orEmpty()
+                require(id.isNotBlank()) { "재생할 곡이 없습니다" }
+                val kind = p.string("kind").orEmpty()
+                val isVideo = kind == "video"
+                val title = p.string("title").orEmpty()
+                val seed = Song(
+                    videoId = id,
+                    title = title,
+                    artist = p.string("artist").orEmpty(),
+                    thumbnailUrl = p.string("thumbnailUrl"),
+                    durationText = p.string("durationText"),
+                    isVideo = isVideo,
+                    isVideoOrigin = isVideo,
+                    radioName = title.ifBlank { "라디오" },
+                )
+                val related = withContext(Dispatchers.IO) {
+                    runCatching {
+                        YtMusicRepository.radio(id, preferVideo = isVideo).getOrNull().orEmpty()
+                    }.getOrDefault(emptyList())
+                }
+                val station = seed.title.ifBlank { "라디오" }
+                val queue = buildList {
+                    add(seed.copy(radioName = station))
+                    related.asSequence()
+                        .filter { it.videoId.isNotBlank() && it.videoId != id }
+                        .distinctBy { it.videoId }
+                        .take(MAX_STATION_TRACKS)
+                        .forEach { add(it.copy(radioName = station, queueTier = QueueTier.AUTOPLAY)) }
+                }
+                requireController().playSongs(queue, 0)
                 null
             }
             "player.playSearch" -> {
