@@ -754,19 +754,7 @@
             android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
             android:value="com.music.bitchord.playback.cast.CastOptionsProvider" />
         <!-- Tesla/car web bridge: static UI + WebSocket server on the phone.
-             The launcher icon starts the service without needing a reboot. -->
-        <activity
-            android:name=".car.CarBridgeLauncherActivity"
-            android:exported="true"
-            android:label="Car Bridge"
-            android:noHistory="true"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-
+             Enabled from Settings; no launcher icon (see CarBridgeSettings). -->
         <service
             android:name=".car.CarBridgeService"
             android:exported="false"
