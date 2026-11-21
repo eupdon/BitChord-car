@@ -113,6 +113,8 @@ img.noart, img:not([src]) { opacity: 0; }
 }
 .icon-btn:hover { color: var(--systemPrimary); background: var(--systemGray4); }
 .only-narrow { display: none; }
+/* The detail page is a pushed page even on a wide car display. */
+.only-narrow.show { display: flex; }
 
 /* ---- shared bits -------------------------------------------------------- */
 .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--keyColor); margin-bottom: 10px; }

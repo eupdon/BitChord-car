@@ -779,6 +779,8 @@
       detail: S.detail ? (S.detail.title || '상세') : '상세',
     };
     $('crumb').textContent = names[page] || 'BitChord';
+    // Visible on every width while a pushed (detail) page is on screen.
+    $('backBtn').classList.toggle('show', page === 'detail');
     $('main').scrollTop = 0;
     if (page === 'home' && !S.home.length && !S.homeLoading) loadHome();
     if (page === 'search' && !S.search.recents.length) loadSearchRecents();
