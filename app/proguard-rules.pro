@@ -78,6 +78,11 @@
 -dontwarn javax.script.**
 -dontwarn jdk.dynalink.**
 -dontwarn org.ietf.jgss.**
+# Ktor's static-content machinery (io.ktor.server.http.content.ReloadingZipFileSystem,
+# pulled in by the car bridge's ktor-server-core dependency) probes this JDK
+# watch-service class. On Android that branch is never taken; without this rule
+# R8 aborts the release build with "Missing classes detected while running R8".
+-dontwarn com.sun.nio.file.**
 
 # ---- "BitChord for Wear OS": the ADB client that installs the watch app ----
 # libadb-android drives the pairing and transport through Conscrypt and SPAKE2,
