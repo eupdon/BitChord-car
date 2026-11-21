@@ -2,38 +2,30 @@ package com.music.bitchord.car
 
 import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.data.model.ShelfItem
-import com.music.bitchord.data.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * The Library screen's contents, assembled from the same sources as the app.
- *
- * YouTube Music has no single library feed, so this reads each part the app
- * reads — recents, Liked Music, saved songs, and the saved collection shelves —
- * and adds the phone's own playlists as one more shelf.
+ * The car Library shows only the four sections the app's library is organised
+ * around: playlists, artists, podcasts and this phone's own playlists. Liked
+ * songs, saved songs, albums and subscriptions are deliberately not mirrored
+ * into the car UI.
  */
 object CarLibraryGateway {
 
     suspend fun load(): LibraryDataDto = withContext(Dispatchers.IO) {
         val sections = mutableListOf<LibrarySectionDto>()
-
-        val recent = runCatching { YtMusicRepository.homeRecentlyPlayed().getOrNull() }.getOrNull()
-        if (recent != null && recent.items.isNotEmpty()) {
-            sections += LibrarySectionDto("최근 재생", "cards", recent.items.map { it.toCard() })
-        }
-
         val page = runCatching { YtMusicRepository.library().getOrNull() }.getOrNull()
-        if (page != null) {
-            if (page.likedSongs.isNotEmpty()) {
-                sections += LibrarySectionDto("좋아요", "tracks", page.likedSongs.map { it.toItem() })
-            }
-            if (page.librarySongs.isNotEmpty()) {
-                sections += LibrarySectionDto("노래", "tracks", page.librarySongs.map { it.toItem() })
-            }
-            page.shelves.forEach { shelf ->
-                if (shelf.items.isEmpty()) return@forEach
-                sections += LibrarySectionDto(shelf.title, "cards", shelf.items.map { it.toCard() })
+
+        val shelves = listOf(
+            YtMusicRepository.PLAYLISTS_SHELF to "Playlist",
+            "Artists" to "Artists",
+            "Podcasts" to "Podcasts",
+        )
+        shelves.forEach { (source, label) ->
+            val shelf = page?.shelves?.firstOrNull { it.title.equals(source, ignoreCase = true) }
+            if (shelf != null && shelf.items.isNotEmpty()) {
+                sections += LibrarySectionDto(label, "cards", shelf.items.map { it.toCard() })
             }
         }
 
@@ -63,14 +55,5 @@ object CarLibraryGateway {
         title = title,
         subtitle = subtitle,
         thumbnailUrl = thumbnailUrl,
-    )
-
-    private fun Song.toItem() = SearchItemDto(
-        kind = "song",
-        id = videoId,
-        title = title,
-        subtitle = artist,
-        thumbnailUrl = thumbnailUrl,
-        durationText = durationText,
     )
 }

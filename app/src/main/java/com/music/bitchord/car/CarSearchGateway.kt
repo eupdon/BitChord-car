@@ -46,42 +46,71 @@ object CarSearchGateway {
         id to songs.map { it.toDto() }
     }
 
-    /** The same rows the app draws: a top result and typed sections. */
+    /**
+     * The app's result groups, in the car's order: 곡 → 아티스트 → 앨범 →
+     * 플레이리스트. YouTube Music's "Songs" filter still mixes in video uploads
+     * on some accounts, so the explicit Videos page is read as well and its rows
+     * are appended after the real tracks — music first, videos last.
+     */
     suspend fun detailed(query: String, filter: SearchFilter): SearchDataDto = withContext(Dispatchers.IO) {
         val clean = query.trim()
         require(clean.isNotEmpty()) { "검색어가 비어 있습니다" }
 
-        val rows = YtMusicRepository.searchPage(clean, filter).getOrNull()?.rows.orEmpty()
-        require(rows.isNotEmpty()) { "결과가 없습니다" }
-
-        val playable = mutableListOf<Song>()
-        val seen = HashSet<String>()
-        fun addPlayable(song: Song): Int {
-            val existing = playable.indexOfFirst { it.videoId == song.videoId }
-            if (existing >= 0) return existing
-            if (playable.size >= MAX_RESULTS) return -1
-            if (!seen.add(song.videoId)) return -1
-            playable += song
-            return playable.size - 1
+        val mainRows = YtMusicRepository.searchPage(clean, filter).getOrNull()?.rows.orEmpty()
+        val videoRows = if (filter == SearchFilter.SONGS) {
+            runCatching {
+                YtMusicRepository.searchPage(clean, SearchFilter.VIDEOS).getOrNull()?.rows.orEmpty()
+            }.getOrDefault(emptyList())
+        } else {
+            emptyList()
         }
 
-        var top: SearchItemDto? = null
+        val pool = mutableListOf<Song>()
+        val seenIds = HashSet<String>()
+        fun addSong(song: Song) {
+            if (song.videoId.isBlank() || !seenIds.add(song.videoId)) return
+            if (pool.size < MAX_RESULTS) pool += song
+        }
+        (mainRows + videoRows).forEach { row ->
+            when (row) {
+                is SearchResult.TopTrack -> addSong(row.song)
+                is SearchResult.Track -> addSong(row.song)
+                is SearchResult.Browse -> Unit
+            }
+        }
+
+        // Stable sort: relevance order is kept inside each of the two groups.
+        val songs = pool.sortedWith(compareBy<Song> { song ->
+            if (song.isVideo || song.isVideoOrigin) 1 else 0
+        })
+        require(songs.isNotEmpty() || mainRows.any { it is SearchResult.Browse }) { "결과가 없습니다" }
+
+        val playable = mutableListOf<Song>()
+        val playIndex = HashMap<String, Int>()
+        songs.forEach { song ->
+            playIndex[song.videoId] = playable.size
+            playable += song
+        }
+
         val groups = LinkedHashMap<String, MutableList<SearchItemDto>>()
         fun add(group: String, item: SearchItemDto) {
             groups.getOrPut(group) { mutableListOf() } += item
         }
 
-        rows.forEach { row ->
+        songs.forEach { song ->
+            val kind = if (song.isVideo || song.isVideoOrigin) "video" else "song"
+            add("songs", song.toItem(kind, playIndex[song.videoId] ?: -1))
+        }
+
+        var top: SearchItemDto? = null
+        mainRows.forEach { row ->
             when (row) {
                 is SearchResult.TopTrack -> {
-                    if (filter == SearchFilter.ALL) {
-                        top = row.song.toItem("song", addPlayable(row.song))
-                    } else {
-                        add("songs", row.song.toItem("song", addPlayable(row.song)))
+                    if (filter == SearchFilter.ALL && !row.song.isVideo) {
+                        top = row.song.toItem("song", playIndex[row.song.videoId] ?: -1)
                     }
                 }
-                is SearchResult.Track ->
-                    add("songs", row.song.toItem("song", addPlayable(row.song)))
+                is SearchResult.Track -> Unit
                 is SearchResult.Browse -> {
                     val group = when (row.item.type) {
                         BrowseType.ARTIST -> "artists"
@@ -98,13 +127,16 @@ object CarSearchGateway {
         if (cache.size >= MAX_CACHE) cache.clear()
         cache[id] = playable.toList()
 
-        val titles = mapOf(
-            "songs" to "곡", "artists" to "아티스트", "albums" to "앨범",
-            "playlists" to "플레이리스트", "more" to "더 보기",
+        val titles = linkedMapOf(
+            "songs" to "곡",
+            "artists" to "아티스트",
+            "albums" to "앨범",
+            "playlists" to "플레이리스트",
+            "more" to "더 보기",
         )
-        val sections = groups.mapNotNull { (key, items) ->
-            if (items.isEmpty()) null
-            else SearchSectionDto(if (filter == SearchFilter.ALL) titles[key] else null, items)
+        val sections = titles.mapNotNull { (key, title) ->
+            val items = groups[key]?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            SearchSectionDto(title, items)
         }
 
         SearchDataDto(
