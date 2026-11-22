@@ -74,10 +74,10 @@ class CarBridgeService : Service() {
     /** The bridge URL is only useful if it names the interface that is actually up. */
     private val connectivity by lazy { getSystemService(ConnectivityManager::class.java) }
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
-        override fun onAvailable(network: Network) = refreshNotification()
-        override fun onLost(network: Network) = refreshNotification()
+        override fun onAvailable(network: Network) = onNetworkChanged()
+        override fun onLost(network: Network) = onNetworkChanged()
         override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) =
-            refreshNotification()
+            onNetworkChanged()
     }
 
     private val prefs by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
@@ -239,6 +239,14 @@ class CarBridgeService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        if (intent?.action == ACTION_REFRESH) {
+            if (!CarBridgeController.isEnabled(this)) {
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            refreshNotification()
+            return START_STICKY
+        }
         if (!CarBridgeController.isEnabled(this)) {
             stopSelf()
             return START_NOT_STICKY
@@ -276,7 +284,12 @@ class CarBridgeService : Service() {
         }
     }
 
-    /** Called again whenever the network changes so the hotspot IP stays correct. */
+    private fun onNetworkChanged() {
+        refreshNotification()
+        CarBridgeController.refreshRunningState(this)
+    }
+
+    /** Called again whenever the network changes so the access URL stays correct. */
     private fun refreshNotification() {
         getSystemService(NotificationManager::class.java)
             .notify(NOTIFICATION_ID, buildNotification())
@@ -302,41 +315,20 @@ class CarBridgeService : Service() {
         )
         val open = PendingIntent.getActivity(this, 2, Intent(this, MainActivity::class.java), flags)
 
+        val url = CarBridgeController.accessUrl(this)
+        val detail = CarBridgeAccess.notificationText(this)
         return NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle("BitChord Car Bridge")
-            .setContentText("http://${phoneIp()}:$PORT/")
+            .setContentText(url)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(detail + "\nOpen in Tesla browser. Direct IP may be blocked by Tesla; use Local Domain mode with Shizuku if needed."))
             .setOngoing(true)
             .setContentIntent(open)
             .addAction(android.R.drawable.ic_media_pause, "Stop", stop)
             .build()
     }
 
-    /**
-     * Address a client on the phone's hotspot can actually reach.
-     *
-     * WifiManager.connectionInfo is unreliable in AP mode (often 0, or the
-     * station-side address), so enumerate interfaces and prefer the well-known
-     * soft-AP addresses before any other LAN address. Mobile-data addresses
-     * (10.*) are deliberately last — they are not reachable from the hotspot.
-     */
-    private fun phoneIp(): String {
-        val addresses = NetworkInterface.getNetworkInterfaces()?.toList()
-            .orEmpty()
-            .asSequence()
-            .filter { it.isUp }
-            .flatMap { it.inetAddresses.toList().asSequence() }
-            .filterIsInstance<Inet4Address>()
-            .filter { !it.isLoopbackAddress }
-            .map { it.hostAddress }
-            .toList()
-
-        return addresses.firstOrNull { it == "192.168.137.1" || it == "192.168.43.1" }
-            ?: addresses.firstOrNull { it.startsWith("192.168.") }
-            ?: addresses.firstOrNull { !it.startsWith("10.") }
-            ?: addresses.firstOrNull()
-            ?: "192.168.43.1"
-    }
+    private fun phoneIp(): String = CarBridgeAccess.phoneIp()
 
     companion object {
         const val PORT = 8777
@@ -349,7 +341,8 @@ class CarBridgeService : Service() {
         private const val PREFS = "car_bridge"
         private const val KEY_TOKEN = "token"
         private const val NOTIFICATION_ID = 8777
-        private const val ACTION_STOP = "com.music.bitchord.car.STOP"
+        const val ACTION_STOP = "com.music.bitchord.car.STOP"
+        const val ACTION_REFRESH = "com.music.bitchord.car.REFRESH"
         private const val PUSH_INTERVAL_MS = 2_000L
     }
 }
