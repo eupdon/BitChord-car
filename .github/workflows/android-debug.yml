@@ -1,0 +1,102 @@
+name: Android Debug APK (no signing secrets)
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_phone:
+        description: 'bitchord-phone (app)'
+        type: boolean
+        default: true
+      build_wear:
+        description: 'bitchord-wear (wearos)'
+        type: boolean
+        default: true
+
+jobs:
+  build-prod-debug:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    # Keeps the same shape as the release workflow. Empty values are fine here:
+    # debug builds use Android's default debug key and never read keystore.properties.
+    - name: Prepare local.properties
+      run: |
+        printf 'LASTFM_API_KEY=\n' > local.properties
+        printf 'LASTFM_SECRET=\n' >> local.properties
+        printf 'LISTEN_TOGETHER_SERVER=\n' >> local.properties
+        printf 'No keystore is needed for this debug build.\n'
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Build selected debug APKs
+      env:
+        BUILD_PHONE: ${{ inputs.build_phone }}
+        BUILD_WEAR: ${{ inputs.build_wear }}
+      run: |
+        set -euo pipefail
+        TASKS=""
+        if [ "$BUILD_PHONE" = "true" ]; then TASKS="$TASKS :app:assembleProdDebug"; fi
+        if [ "$BUILD_WEAR" = "true" ]; then TASKS="$TASKS :wearos:assembleProdDebug"; fi
+        if [ -z "$TASKS" ]; then
+          echo "::error::No build target selected. Enable bitchord-phone and/or bitchord-wear in the workflow inputs."
+          exit 1
+        fi
+        echo "Gradle tasks:$TASKS"
+        ./gradlew $TASKS
+
+    # Gradle writes its outputs under build/ on the ephemeral runner (nothing is
+    # committed). Copy only the selected, finished APKs into a clean staging
+    # folder, then upload that folder so the artifact zip contains just the APKs
+    # at root with no build/ directory noise.
+    - name: Stage selected debug APKs for artifact
+      env:
+        BUILD_PHONE: ${{ inputs.build_phone }}
+        BUILD_WEAR: ${{ inputs.build_wear }}
+      run: |
+        set -euo pipefail
+        STAGE="$RUNNER_TEMP/bitchord-apks"
+        rm -rf "$STAGE"
+        mkdir -p "$STAGE"
+
+        if [ "$BUILD_PHONE" = "true" ]; then
+          PHONE_APK=$(find app/build/outputs/apk/prod/debug -maxdepth 1 -name '*.apk' -type f -print -quit 2>/dev/null || true)
+          if [ -z "$PHONE_APK" ]; then
+            echo "::error::Phone debug APK was not produced."
+            exit 1
+          fi
+          cp "$PHONE_APK" "$STAGE/bitchord-phone-debug.apk"
+        fi
+
+        if [ "$BUILD_WEAR" = "true" ]; then
+          WEAR_APK=$(find wearos/build/outputs/apk/prod/debug -maxdepth 1 -name '*.apk' -type f -print -quit 2>/dev/null || true)
+          if [ -z "$WEAR_APK" ]; then
+            echo "::error::Wear OS debug APK was not produced."
+            exit 1
+          fi
+          cp "$WEAR_APK" "$STAGE/bitchord-wear-debug.apk"
+        fi
+
+        if [ -z "$(ls -A "$STAGE")" ]; then
+          echo "::error::Nothing was staged. No build target was selected."
+          exit 1
+        fi
+        ls -lh "$STAGE"
+
+    - name: Upload selected debug APKs (single bundle)
+      uses: actions/upload-artifact@v4
+      with:
+        name: bitchord-debug-apks
+        path: ${{ runner.temp }}/bitchord-apks
+        if-no-files-found: error
+        retention-days: 14

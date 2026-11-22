@@ -1,9 +1,16 @@
 name: Android Release APK
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      build_phone:
+        description: 'bitchord-phone (app)'
+        type: boolean
+        default: true
+      build_wear:
+        description: 'bitchord-wear (wearos)'
+        type: boolean
+        default: true
 
 jobs:
   build-prod-release:
@@ -21,36 +28,79 @@ jobs:
         cache: gradle
 
     - name: Setup Secrets (Keystore & local.properties)
+      env:
+        LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+        LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+        LISTEN_TOGETHER_SERVER: ${{ secrets.LISTEN_TOGETHER_SERVER }}
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       run: |
-        echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
-        echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
-        echo "LISTEN_TOGETHER_SERVER=${{ secrets.LISTEN_TOGETHER_SERVER }}" >> local.properties
-
-        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > bitchord-release.jks
+        printf 'LASTFM_API_KEY=%s\n' "$LASTFM_API_KEY" > local.properties
+        printf 'LASTFM_SECRET=%s\n' "$LASTFM_SECRET" >> local.properties
+        printf 'LISTEN_TOGETHER_SERVER=%s\n' "$LISTEN_TOGETHER_SERVER" >> local.properties
+        printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n' | base64 -d > bitchord-release.jks
         {
           echo "storeFile=bitchord-release.jks"
-          echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}"
-          echo "keyAlias=${{ secrets.KEY_ALIAS }}"
-          echo "keyPassword=${{ secrets.KEY_PASSWORD }}"
+          echo "storePassword=$KEYSTORE_PASSWORD"
+          echo "keyAlias=$KEY_ALIAS"
+          echo "keyPassword=$KEY_PASSWORD"
         } > keystore.properties
+
+    - name: Verify signing secrets
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      run: |
+        echo "KEYSTORE_BASE64 chars: ${#KEYSTORE_BASE64}"
+        echo "KEYSTORE_PASSWORD chars: ${#KEYSTORE_PASSWORD}"
+        echo "KEY_ALIAS: $KEY_ALIAS"
+        echo "KEY_PASSWORD chars: ${#KEY_PASSWORD}"
+        echo "jks bytes: $(wc -c < bitchord-release.jks)"
+        if [ ! -s bitchord-release.jks ]; then
+          echo "::error::bitchord-release.jks is EMPTY. Repository secret KEYSTORE_BASE64 is missing or was added as a Variable."
+          exit 1
+        fi
+        file bitchord-release.jks
+        keytool -list -keystore bitchord-release.jks \
+          -storepass "$KEYSTORE_PASSWORD" \
+          -alias "$KEY_ALIAS"
+        echo "Keystore OK"
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Build Signed Prod Release APK
-      run: ./gradlew assembleProdRelease
+    - name: Build selected signed release APKs
+      env:
+        BUILD_PHONE: ${{ inputs.build_phone }}
+        BUILD_WEAR: ${{ inputs.build_wear }}
+      run: |
+        set -euo pipefail
+        TASKS=""
+        if [ "$BUILD_PHONE" = "true" ]; then TASKS="$TASKS :app:assembleProdRelease"; fi
+        if [ "$BUILD_WEAR" = "true" ]; then TASKS="$TASKS :wearos:assembleProdRelease"; fi
+        if [ -z "$TASKS" ]; then
+          echo "::error::No build target selected. Enable bitchord-phone and/or bitchord-wear in the workflow inputs."
+          exit 1
+        fi
+        echo "Gradle tasks:$TASKS"
+        ./gradlew $TASKS
 
-    - name: Upload APK Artifact
+    - name: Upload phone signed APK
+      if: ${{ inputs.build_phone }}
       uses: actions/upload-artifact@v4
       with:
         name: bitchord-prod-release-signed
         path: app/build/outputs/apk/prod/release/*.apk
+        if-no-files-found: error
 
-    # Built by the same assembleProdRelease, with the same key. The watch app
-    # only pairs with a phone app signed by the same key, so a prod watch APK
-    # for these phone builds can only come from here, never a local build.
-    - name: Upload Wear OS APK Artifact
+    - name: Upload Wear OS signed APK
+      if: ${{ inputs.build_wear }}
       uses: actions/upload-artifact@v4
       with:
         name: bitchord-wear-prod-release-signed
         path: wearos/build/outputs/apk/prod/release/*.apk
+        if-no-files-found: error
