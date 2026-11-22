@@ -404,6 +404,10 @@ dependencies {
     implementation("io.ktor:ktor-server-cio:3.5.2")
     implementation("io.ktor:ktor-server-websockets:3.5.2")
 
+    // ---- Shizuku: optional ADB/root privilege bridge for Tesla local-domain mode ----
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
+
     // ---- YouTube stream extraction: live-benchmarked client catalog + cipher tiers ----
     implementation("com.github.MetrolistGroup.innertubex:innertubex-android:v0.7.0")
 
