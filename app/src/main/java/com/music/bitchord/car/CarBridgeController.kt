@@ -35,7 +35,7 @@ object CarBridgeController {
         val app = context.applicationContext
         _enabled.value = isEnabled(app)
         _accessMode.value = CarBridgeAccess.mode(app)
-        CarBridgeShizuku.init(app)
+        CarBridgeAdb.init(app)
         syncFromPrefs(app)
     }
 
@@ -46,7 +46,17 @@ object CarBridgeController {
         CarBridgeAccess.setMode(app, mode)
         _accessMode.value = mode
         if (isEnabled(app)) {
+            if (mode == CarBridgeAccessMode.TESLA_LOCAL_DOMAIN) {
+                // DNS VPN requires user approval; service start only when already prepared.
+                if (CarBridgeDnsService.prepareIntent(app) == null) {
+                    CarBridgeDnsService.start(app)
+                }
+            } else {
+                CarBridgeDnsService.stopDns(app)
+            }
             refreshRunningState(app)
+        } else {
+            CarBridgeDnsService.stopDns(app)
         }
     }
 
@@ -69,6 +79,8 @@ object CarBridgeController {
             }
         } else {
             scope.launch { CarBridgeRouteManager.clear(app) }
+            CarBridgeDnsService.stopDns(app)
+            CarBridgeAdb.close()
             if (CarBridgeService.running) app.stopService(intent)
         }
     }
@@ -83,6 +95,8 @@ object CarBridgeController {
             refreshRunningState(app)
         } else {
             scope.launch { CarBridgeRouteManager.clear(app) }
+            CarBridgeDnsService.stopDns(app)
+            CarBridgeAdb.close()
             app.stopService(intent)
         }
     }
@@ -93,11 +107,13 @@ object CarBridgeController {
         prefs(app).edit().putBoolean(KEY_ENABLED, false).apply()
         _enabled.value = false
         scope.launch { CarBridgeRouteManager.clear(app) }
+        CarBridgeDnsService.stopDns(app)
+        CarBridgeAdb.close()
     }
 
     fun refreshRunningState(context: Context) {
         val app = context.applicationContext
-        CarBridgeShizuku.refresh(app)
+        CarBridgeAdb.refresh(app)
         scope.launch { CarBridgeRouteManager.apply(app) }
         if (CarBridgeService.running) {
             runCatching {

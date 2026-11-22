@@ -7,19 +7,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import rikka.shizuku.Shizuku
 
 /**
  * Best-effort local-domain routing for Tesla browser.
  *
  * Tesla blocks RFC1918/private IPs in browser. Local Domain mode advertises a
- * public-looking host/IP (e.g. bitchord.car -> 172.32.0.1) and, when Shizuku is
- * ready, installs iptables rules that redirect hotspot-client traffic for that
- * IP:PORT to the phone's local bridge port. DNS mapping itself must be provided
- * by the phone hotspot/DNS setup; we expose the target values in UI/notification.
+ * public-looking host/IP (e.g. bitchord.car -> 172.32.0.1) and, when embedded
+ * ADB is ready, installs iptables rules that redirect hotspot-client traffic for
+ * that IP:PORT to the phone's local bridge port.
  *
+ * DNS mapping is handled separately by [CarBridgeDnsService] (VpnService local DNS).
  * This is intentionally isolated and optional. Direct IP mode remains default.
  */
 object CarBridgeRouteManager {
@@ -44,8 +41,8 @@ object CarBridgeRouteManager {
             _state.value = State(false, "Direct IP mode")
             return@withContext
         }
-        if (!CarBridgeShizuku.isReady()) {
-            _state.value = State(false, "Tesla Local Domain selected; start Shizuku and grant permission")
+        if (!CarBridgeAdb.isReady()) {
+            _state.value = State(false, "Tesla Local Domain selected; complete Wireless debugging pairing in settings")
             return@withContext
         }
 
@@ -65,7 +62,7 @@ object CarBridgeRouteManager {
         val app = context.applicationContext
         val ip = CarBridgeAccess.publicIp(app)
         val port = CarBridgeService.PORT
-        if (CarBridgeShizuku.isReady()) {
+        if (CarBridgeAdb.isReady()) {
             runCommands(buildCleanupCommands(ip, port))
         }
         _state.value = State(false, "Direct IP mode")
@@ -94,7 +91,7 @@ object CarBridgeRouteManager {
 
     private data class CmdResult(val ok: Boolean, val message: String)
 
-    private fun runCommands(commands: List<String>): CmdResult {
+    private suspend fun runCommands(commands: List<String>): CmdResult {
         var lastErr = ""
         for (cmd in commands) {
             val r = runShell(cmd)
@@ -103,26 +100,10 @@ object CarBridgeRouteManager {
         return if (lastErr.isBlank()) CmdResult(true, "ok") else CmdResult(false, lastErr)
     }
 
-    private fun runShell(command: String): CmdResult {
-        return runCatching {
-            val process = newShizukuProcess(arrayOf("sh", "-c", command))
-            val out = BufferedReader(InputStreamReader(process.inputStream)).readText().trim()
-            val err = BufferedReader(InputStreamReader(process.errorStream)).readText().trim()
-            val code = process.waitFor()
-            if (code == 0) CmdResult(true, out.ifBlank { "ok" })
-            else CmdResult(false, err.ifBlank { out.ifBlank { "exit $code" } })
-        }.getOrElse { CmdResult(false, it.message ?: "shell failed") }
-    }
-
-    @Suppress("PrivateApi")
-    private fun newShizukuProcess(cmd: Array<String>): Process {
-        val method = Shizuku::class.java.getDeclaredMethod(
-            "newProcess",
-            Array<String>::class.java,
-            Array<String>::class.java,
-            String::class.java,
+    private suspend fun runShell(command: String): CmdResult {
+        return CarBridgeAdb.shell(command).fold(
+            onSuccess = { out -> CmdResult(true, out.ifBlank { "ok" }) },
+            onFailure = { e -> CmdResult(false, e.message ?: "adb shell failed") }
         )
-        method.isAccessible = true
-        return method.invoke(null, cmd, null, null) as Process
     }
 }

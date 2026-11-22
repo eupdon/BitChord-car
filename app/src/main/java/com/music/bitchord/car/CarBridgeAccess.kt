@@ -20,7 +20,7 @@ object CarBridgeAccess {
     const val KEY_LOCAL_DOMAIN = "local_domain"
     const val KEY_PUBLIC_IP = "public_ip"
     const val DEFAULT_LOCAL_DOMAIN = "bitchord.car"
-    // Public-looking IP outside RFC1918; mapped to the phone via Shizuku/iptables.
+    // Public-looking IP outside RFC1918; mapped locally via embedded ADB iptables + DNS VPN.
     const val DEFAULT_PUBLIC_IP = "172.32.0.1"
 
     fun mode(context: Context): CarBridgeAccessMode =

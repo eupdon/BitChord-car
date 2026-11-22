@@ -321,7 +321,7 @@ class CarBridgeService : Service() {
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle("BitChord Car Bridge")
             .setContentText(url)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(detail + "\nOpen in Tesla browser. Direct IP may be blocked by Tesla; use Local Domain mode with Shizuku if needed."))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(detail + "\nOpen in Tesla browser. Direct IP may be blocked by Tesla; use Local Domain mode in Settings."))
             .setOngoing(true)
             .setContentIntent(open)
             .addAction(android.R.drawable.ic_media_pause, "Stop", stop)
