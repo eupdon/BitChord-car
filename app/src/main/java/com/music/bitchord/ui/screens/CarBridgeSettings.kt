@@ -1,8 +1,11 @@
 package com.music.bitchord.ui.screens
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings as AndroidSettings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,32 +32,45 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.car.CarBridgeAccess
 import com.music.bitchord.car.CarBridgeAccessMode
+import com.music.bitchord.car.CarBridgeAdb
 import com.music.bitchord.car.CarBridgeController
+import com.music.bitchord.car.CarBridgeDnsService
 import com.music.bitchord.car.CarBridgeRouteManager
 import com.music.bitchord.car.CarBridgeService
-import com.music.bitchord.car.CarBridgeShizuku
 
 /**
- * Settings entry for the Tesla/car web remote.
+ * Settings entry for Tesla/car web remote.
  *
- * Lives in its own file so SettingsSheet only needs one inserted call and the
- * bridge stays isolated from upstream code.
+ * Local Domain mode is BitChord-native: embedded ADB (Kadb) + local DNS VPN.
+ * No external Shizuku app required.
  */
 @Composable
 internal fun CarBridgeSettingsRow() {
     val context = LocalContext.current
     val enabled by CarBridgeController.enabled.collectAsStateWithLifecycle()
     val mode by CarBridgeController.accessMode.collectAsStateWithLifecycle()
-    val shizuku by CarBridgeShizuku.state.collectAsStateWithLifecycle()
+    val adb by CarBridgeAdb.state.collectAsStateWithLifecycle()
     val route by CarBridgeRouteManager.state.collectAsStateWithLifecycle()
 
     var domain by remember { mutableStateOf(CarBridgeAccess.localDomain(context)) }
     var publicIp by remember { mutableStateOf(CarBridgeAccess.publicIp(context)) }
+    var connectPort by remember { mutableStateOf(CarBridgeAdb.savedConnectPort(context)?.toString().orEmpty()) }
+    var pairPort by remember { mutableStateOf(CarBridgeAdb.savedPairPort(context)?.toString().orEmpty()) }
+    var pairingCode by remember { mutableStateOf("") }
+
+    val vpnLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            CarBridgeDnsService.start(context)
+            CarBridgeController.refreshRunningState(context)
+        }
+    }
 
     LaunchedEffect(Unit) {
         CarBridgeController.load(context)
         domain = CarBridgeAccess.localDomain(context)
         publicIp = CarBridgeAccess.publicIp(context)
+        connectPort = CarBridgeAdb.savedConnectPort(context)?.toString().orEmpty()
+        pairPort = CarBridgeAdb.savedPairPort(context)?.toString().orEmpty()
     }
 
     SettingsGroup(header = "Car Bridge") {
@@ -76,7 +92,7 @@ internal fun CarBridgeSettingsRow() {
             title = "Access mode",
             subtitle = when (mode) {
                 CarBridgeAccessMode.DIRECT_IP -> "Direct hotspot IP (simple, but Tesla browser may block private IPs)"
-                CarBridgeAccessMode.TESLA_LOCAL_DOMAIN -> "Local domain workaround (public-looking host mapped by Shizuku)"
+                CarBridgeAccessMode.TESLA_LOCAL_DOMAIN -> "Built-in Local Domain mode (embedded ADB + local DNS). No Shizuku app."
             },
             trailing = {
                 TextButton(onClick = {
@@ -96,17 +112,14 @@ internal fun CarBridgeSettingsRow() {
             RowDivider()
             Column(Modifier.fillMaxWidth().padding(horizontal = ROW_INSET, vertical = 8.dp)) {
                 Text(
-                    "Tesla blocks private IPs in browser. This mode uses a public-looking domain/IP and maps it locally through Shizuku/ADB privileges. Initial wireless debugging setup is usually required on non-rooted phones.",
+                    "Tesla blocks private IPs. This mode makes BitChord serve a public-looking domain/IP locally. It uses Android Wireless Debugging (ADB) inside BitChord for iptables redirect, plus a local VPN DNS helper. First-time wireless debugging pairing is required.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = domain,
-                    onValueChange = {
-                        domain = it
-                        CarBridgeAccess.setLocalDomain(context, it)
-                    },
+                    onValueChange = { domain = it; CarBridgeAccess.setLocalDomain(context, it) },
                     label = { Text("Local domain") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -114,63 +127,82 @@ internal fun CarBridgeSettingsRow() {
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = publicIp,
-                    onValueChange = {
-                        publicIp = it
-                        CarBridgeAccess.setPublicIp(context, it)
-                    },
+                    onValueChange = { publicIp = it; CarBridgeAccess.setPublicIp(context, it) },
                     label = { Text("Public-looking IP") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    "Shizuku: ${shizuku.status} - ${shizuku.detail}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                OutlinedTextField(
+                    value = connectPort,
+                    onValueChange = { connectPort = it.filter(Char::isDigit).take(5) },
+                    label = { Text("Wireless debugging port") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
                 )
-                Text(
-                    "Route: ${if (route.applied) "active" else "inactive"} - ${route.message}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = pairPort,
+                    onValueChange = { pairPort = it.filter(Char::isDigit).take(5) },
+                    label = { Text("Pairing port") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
                 )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = pairingCode,
+                    onValueChange = { pairingCode = it.filter(Char::isDigit).take(6) },
+                    label = { Text("Pairing code") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                Text("ADB: ${adb.status} - ${adb.detail}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Route: ${if (route.applied) "active" else "inactive"} - ${route.message}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("DNS VPN: ${if (CarBridgeDnsService.running) "running" else "stopped"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(4.dp))
+
                 Row(Modifier.fillMaxWidth()) {
                     TextButton(onClick = {
-                        runCatching {
-                            context.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
-                        }
+                        runCatching { context.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
                     }) { Text("Developer options") }
                     Spacer(Modifier.width(4.dp))
                     TextButton(onClick = {
-                        val wireless = runCatching {
-                            context.startActivity(Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS"))
-                        }.isSuccess
-                        if (!wireless) {
-                            runCatching {
-                                context.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
-                            }
-                        }
+                        val opened = runCatching { context.startActivity(Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS")) }.isSuccess
+                        if (!opened) runCatching { context.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
                     }) { Text("Wireless debugging") }
                 }
                 Row(Modifier.fillMaxWidth()) {
-                    TextButton(onClick = {
-                        val pkg = "moe.shizuku.privileged.api"
-                        val launch = context.packageManager.getLaunchIntentForPackage(pkg)
-                        if (launch != null) {
-                            context.startActivity(launch)
-                        } else {
-                            runCatching {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://shizuku.rikka.app/download/")))
-                            }
-                        }
-                    }) { Text("Open Shizuku") }
+                    TextButton(onClick = { CarBridgeAdb.startDiscovery(context) }) { Text("Discover") }
                     Spacer(Modifier.width(4.dp))
-                    TextButton(onClick = { CarBridgeShizuku.requestPermission() }) { Text("Request permission") }
+                    TextButton(onClick = {
+                        CarBridgeAdb.setManualEndpoint(context, "127.0.0.1", connectPort.toIntOrNull(), pairPort.toIntOrNull())
+                        CarBridgeAdb.pair(context, pairingCode, pairPort.toIntOrNull())
+                    }) { Text("Pair") }
+                    Spacer(Modifier.width(4.dp))
+                    TextButton(onClick = {
+                        CarBridgeAdb.setManualEndpoint(context, "127.0.0.1", connectPort.toIntOrNull(), pairPort.toIntOrNull())
+                        CarBridgeAdb.connect(context, connectPort.toIntOrNull())
+                    }) { Text("Connect") }
+                }
+                Row(Modifier.fillMaxWidth()) {
+                    TextButton(onClick = {
+                        val prep = CarBridgeDnsService.prepareIntent(context)
+                        if (prep != null) vpnLauncher.launch(prep) else {
+                            CarBridgeDnsService.start(context)
+                            CarBridgeController.refreshRunningState(context)
+                        }
+                    }) { Text("Start DNS VPN") }
+                    Spacer(Modifier.width(4.dp))
+                    TextButton(onClick = {
+                        CarBridgeDnsService.stopDns(context)
+                        CarBridgeController.refreshRunningState(context)
+                    }) { Text("Stop DNS VPN") }
                     Spacer(Modifier.width(4.dp))
                     TextButton(onClick = { CarBridgeController.refreshRunningState(context) }) { Text("Apply/Test") }
                 }
                 Text(
-                    "After setup, open http://${domain.ifBlank { CarBridgeAccess.DEFAULT_LOCAL_DOMAIN }}:${CarBridgeService.PORT} in Tesla browser. Phone must remain hotspot owner.",
+                    "After pairing+connect+DNS VPN, open http://${domain.ifBlank { CarBridgeAccess.DEFAULT_LOCAL_DOMAIN }}:${CarBridgeService.PORT} in Tesla browser. Phone must remain hotspot owner. If pairing/connect ports change, reopen Wireless debugging and use Discover/Pair again.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
