@@ -1,9 +1,8 @@
 package com.music.bitchord.ui.screens
 
 import android.content.Intent
-import android.provider.Settings
 import android.net.Uri
-import android.provider.Settings
+import android.provider.Settings as AndroidSettings
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -58,7 +57,7 @@ internal fun CarBridgeSettingsRow() {
         publicIp = CarBridgeAccess.publicIp(context)
     }
 
-    SettingsGroup(title = "Car Bridge") {
+    SettingsGroup(header = "Car Bridge") {
         SettingsRow(
             icon = Icons.Rounded.DirectionsCar,
             title = "Tesla Car Bridge",
@@ -138,17 +137,19 @@ internal fun CarBridgeSettingsRow() {
                 Row(Modifier.fillMaxWidth()) {
                     TextButton(onClick = {
                         runCatching {
-                            context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+                            context.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
                         }
                     }) { Text("Developer options") }
                     Spacer(Modifier.width(4.dp))
                     TextButton(onClick = {
-                        val opened = runCatching {
-                            context.startActivity(Intent(Settings.ACTION_WIRELESS_DEBUGGING_SETTINGS))
-                        }.isSuccess || runCatching {
-                            context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+                        val wireless = runCatching {
+                            context.startActivity(Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS"))
                         }.isSuccess
-                        if (!opened) Unit
+                        if (!wireless) {
+                            runCatching {
+                                context.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+                            }
+                        }
                     }) { Text("Wireless debugging") }
                 }
                 Row(Modifier.fillMaxWidth()) {
