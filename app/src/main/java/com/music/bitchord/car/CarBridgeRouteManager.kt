@@ -105,12 +105,24 @@ object CarBridgeRouteManager {
 
     private fun runShell(command: String): CmdResult {
         return runCatching {
-            val process = Shizuku.newProcess(arrayOf("sh", "-c", command), null, null)
+            val process = newShizukuProcess(arrayOf("sh", "-c", command))
             val out = BufferedReader(InputStreamReader(process.inputStream)).readText().trim()
             val err = BufferedReader(InputStreamReader(process.errorStream)).readText().trim()
             val code = process.waitFor()
             if (code == 0) CmdResult(true, out.ifBlank { "ok" })
             else CmdResult(false, err.ifBlank { out.ifBlank { "exit $code" } })
         }.getOrElse { CmdResult(false, it.message ?: "shell failed") }
+    }
+
+    @Suppress("PrivateApi")
+    private fun newShizukuProcess(cmd: Array<String>): Process {
+        val method = Shizuku::class.java.getDeclaredMethod(
+            "newProcess",
+            Array<String>::class.java,
+            Array<String>::class.java,
+            String::class.java,
+        )
+        method.isAccessible = true
+        return method.invoke(null, cmd, null, null) as Process
     }
 }

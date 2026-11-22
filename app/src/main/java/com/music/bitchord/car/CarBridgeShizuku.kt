@@ -4,10 +4,13 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import rikka.shizuku.Shizuku
 
 /**
@@ -26,8 +29,8 @@ object CarBridgeShizuku {
         val detail: String = "Shizuku not detected",
     )
 
-    private const val TAG = "CarBridgeShizuku"
     private val main = Handler(Looper.getMainLooper())
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
 
@@ -72,7 +75,7 @@ object CarBridgeShizuku {
         }
         _state.value = State(Status.READY, "Shizuku ready")
         if (CarBridgeController.isEnabled(app)) {
-            CarBridgeRouteManager.apply(app)
+            scope.launch { CarBridgeRouteManager.apply(app) }
         }
     }
 
