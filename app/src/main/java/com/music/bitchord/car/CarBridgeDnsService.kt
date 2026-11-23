@@ -338,7 +338,9 @@ class CarBridgeDnsService : VpnService() {
         fun stopDns(context: Context) {
             val app = context.applicationContext
             running = false
-            runCatching { app.stopService(Intent(app, CarBridgeDnsService::class.java)) }
+            val stopIntent = Intent(app, CarBridgeDnsService::class.java).setAction(ACTION_STOP)
+            val sent = runCatching { app.startService(stopIntent) }.isSuccess
+            if (!sent) runCatching { app.stopService(Intent(app, CarBridgeDnsService::class.java)) }
         }
 
         fun prepareIntent(context: Context): Intent? = VpnService.prepare(context.applicationContext)
