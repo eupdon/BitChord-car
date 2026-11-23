@@ -57,6 +57,7 @@ internal fun CarBridgeSettingsRow() {
     val mode by CarBridgeController.accessMode.collectAsStateWithLifecycle()
     val adb by CarBridgeAdb.state.collectAsStateWithLifecycle()
     val route by CarBridgeRouteManager.state.collectAsStateWithLifecycle()
+    val dnsRunning by CarBridgeDnsService.runningFlow.collectAsStateWithLifecycle()
 
     var domain by remember { mutableStateOf(CarBridgeAccess.localDomain(context)) }
 
@@ -64,17 +65,6 @@ internal fun CarBridgeSettingsRow() {
         if (result.resultCode == Activity.RESULT_OK) {
             CarBridgeDnsService.start(context)
             CarBridgeController.refreshRunningState(context)
-        }
-    }
-
-    val notifPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) {
-            CarBridgeAdb.startDiscovery(context)
-            CarBridgePairingNotifier.show(context)
-            val opened = runCatching { context.startActivity(Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS")) }.isSuccess
-            if (!opened) runCatching { context.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
-        } else {
-            Toast.makeText(context, "Notification permission is required for pairing code input.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -88,7 +78,16 @@ internal fun CarBridgeSettingsRow() {
         val needsNotifPerm = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         if (needsNotifPerm) {
-            notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            // Avoid in-app permission launcher here: on some ROMs/flows it can recreate the host activity.
+            // Send user to app notification settings, then they can tap Pair again.
+            Toast.makeText(context, "Allow BitChord notifications, then tap Pair again.", Toast.LENGTH_LONG).show()
+            val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Intent(AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName)
+            } else {
+                Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+            }
+            runCatching { context.startActivity(intent) }
             return
         }
         CarBridgePairingNotifier.show(context)
@@ -167,7 +166,7 @@ internal fun CarBridgeSettingsRow() {
                 Text("URL: ${CarBridgeController.accessUrl(context)}", style = MaterialTheme.typography.bodySmall)
                 Text("ADB: ${adb.status} - ${adb.detail}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("Route: ${if (route.applied) "active" else "inactive"} - ${route.message}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("DNS VPN: ${if (CarBridgeDnsService.running) "running" else "stopped"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("DNS VPN: ${if (dnsRunning) "running" else "stopped"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(8.dp))
 
                 Row(Modifier.fillMaxWidth()) {
