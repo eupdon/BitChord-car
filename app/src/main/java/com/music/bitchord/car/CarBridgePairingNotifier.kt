@@ -44,6 +44,7 @@ object CarBridgePairingNotifier {
             "Wireless debugging pairing",
             "Open Wireless debugging > Pair device with pairing code. Pull this notification down and tap Enter pairing code."
         )
+        Toast.makeText(app, "Pairing notification posted. Pull down notification and tap 'Enter pairing code'.", Toast.LENGTH_LONG).show()
         startWatching(app)
     }
 
@@ -101,7 +102,12 @@ object CarBridgePairingNotifier {
         ensureChannel(app)
         if (!canPost(app)) return
 
-        val replyIntent = Intent(app, CarBridgePairingReceiver::class.java).setAction(ACTION_PAIR_CODE)
+        val port = CarBridgeAdb.state.value.pairPort
+            ?: CarBridgeAdb.state.value.discoveredPairPorts.firstOrNull()
+            ?: -1
+        val replyIntent = Intent(app, CarBridgePairingReceiver::class.java)
+            .setAction(ACTION_PAIR_CODE)
+            .putExtra("pair_port", port)
         val replyPending = PendingIntent.getBroadcast(
             app, 100, replyIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or pendingIntentMutability()
@@ -109,7 +115,7 @@ object CarBridgePairingNotifier {
         val remoteInput = RemoteInput.Builder(KEY_PAIR_CODE)
             .setLabel("6-digit pairing code")
             .build()
-        val replyAction = NotificationCompat.Action.Builder(0, "Enter pairing code", replyPending)
+        val replyAction = NotificationCompat.Action.Builder(android.R.drawable.ic_menu_edit, "Enter pairing code", replyPending)
             .addRemoteInput(remoteInput)
             .setAllowGeneratedReplies(false)
             .build()
