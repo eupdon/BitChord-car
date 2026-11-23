@@ -2,6 +2,7 @@ package com.music.bitchord.ui.screens
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import android.provider.Settings as AndroidSettings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DirectionsCar
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -35,6 +35,7 @@ import com.music.bitchord.car.CarBridgeAccessMode
 import com.music.bitchord.car.CarBridgeAdb
 import com.music.bitchord.car.CarBridgeController
 import com.music.bitchord.car.CarBridgeDnsService
+import com.music.bitchord.car.CarBridgePairingOverlay
 import com.music.bitchord.car.CarBridgeRouteManager
 import com.music.bitchord.car.CarBridgeService
 
@@ -52,8 +53,7 @@ internal fun CarBridgeSettingsRow() {
     val adb by CarBridgeAdb.state.collectAsStateWithLifecycle()
     val route by CarBridgeRouteManager.state.collectAsStateWithLifecycle()
 
-    var showPairDialog by remember { mutableStateOf(false) }
-    var pairingCode by remember { mutableStateOf("") }
+    var domain by remember { mutableStateOf(CarBridgeAccess.localDomain(context)) }
 
     val vpnLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -62,8 +62,28 @@ internal fun CarBridgeSettingsRow() {
         }
     }
 
+    fun openWirelessDebugging() {
+        val opened = runCatching { context.startActivity(Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS")) }.isSuccess
+        if (!opened) runCatching { context.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
+    }
+
+    fun startPairingOverlayFlow() {
+        CarBridgeAdb.startDiscovery(context)
+        if (CarBridgePairingOverlay.canShow(context)) {
+            CarBridgePairingOverlay.show(context)
+            openWirelessDebugging()
+        } else {
+            val intent = Intent(
+                AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:${context.packageName}")
+            )
+            runCatching { context.startActivity(intent) }
+        }
+    }
+
     LaunchedEffect(Unit) {
         CarBridgeController.load(context)
+        domain = CarBridgeAccess.localDomain(context)
     }
 
     LaunchedEffect(enabled, mode) {
@@ -71,59 +91,6 @@ internal fun CarBridgeSettingsRow() {
             CarBridgeAdb.startDiscovery(context)
             CarBridgeController.refreshRunningState(context)
         }
-    }
-
-    if (showPairDialog) {
-        AlertDialog(
-            onDismissRequest = { showPairDialog = false },
-            title = { Text("Pair Wireless Debugging") },
-            text = {
-                Column {
-                    Text(
-                        "1. Open Wireless debugging\n" +
-                            "2. Tap 'Pair device with pairing code'\n" +
-                            "3. Keep that screen visible (use split screen/pop-up view) and enter the 6-digit code here.\n\n" +
-                            "Leaving the pairing screen may cancel pairing on some Android versions.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = pairingCode,
-                        onValueChange = { pairingCode = it.filter(Char::isDigit).take(6) },
-                        label = { Text("6-digit pairing code") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    val pairPort = adb.pairPort ?: adb.discoveredPairPorts.firstOrNull()
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        if (pairPort != null) "Detected pairing port: $pairPort" else "Pairing port will be auto-detected. If not found, open pairing screen and wait.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val pairPort = adb.pairPort ?: adb.discoveredPairPorts.firstOrNull()
-                    CarBridgeAdb.pair(context, pairingCode, pairPort)
-                    if (pairingCode.trim().length >= 6 && pairPort != null) {
-                        showPairDialog = false
-                        pairingCode = ""
-                    }
-                }) { Text("Pair") }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(onClick = {
-                        val opened = runCatching { context.startActivity(Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS")) }.isSuccess
-                        if (!opened) runCatching { context.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
-                    }) { Text("Open settings") }
-                    TextButton(onClick = { showPairDialog = false }) { Text("Cancel") }
-                }
-            },
-        )
     }
 
     SettingsGroup(header = "Car Bridge") {
@@ -165,9 +132,21 @@ internal fun CarBridgeSettingsRow() {
             RowDivider()
             Column(Modifier.fillMaxWidth().padding(horizontal = ROW_INSET, vertical = 8.dp)) {
                 Text(
-                    "Tesla blocks private IPs. BitChord handles Local Domain automatically: discovers Wireless Debugging, connects ADB, applies route, and serves DNS for the configured domain.",
+                    "Tesla blocks private IPs. BitChord handles Local Domain automatically. Pairing is only needed once; pairing overlay can stay over Wireless Debugging.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = domain,
+                    onValueChange = {
+                        domain = it
+                        CarBridgeAccess.setLocalDomain(context, it)
+                        CarBridgeController.refreshRunningState(context)
+                    },
+                    label = { Text("Local domain") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
                 Text("URL: ${CarBridgeController.accessUrl(context)}", style = MaterialTheme.typography.bodySmall)
@@ -177,17 +156,11 @@ internal fun CarBridgeSettingsRow() {
                 Spacer(Modifier.height(8.dp))
 
                 Row(Modifier.fillMaxWidth()) {
-                    TextButton(onClick = { CarBridgeAdb.startDiscovery(context) }) { Text("Auto connect") }
+                    TextButton(onClick = { CarBridgeAdb.startDiscovery(context); CarBridgeAdb.connect(context, null) }) { Text("Auto connect") }
                     Spacer(Modifier.width(4.dp))
-                    TextButton(onClick = {
-                        CarBridgeAdb.startDiscovery(context)
-                        showPairDialog = true
-                    }) { Text("Pair") }
+                    TextButton(onClick = { startPairingOverlayFlow() }) { Text("Pair") }
                     Spacer(Modifier.width(4.dp))
-                    TextButton(onClick = {
-                        val opened = runCatching { context.startActivity(Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS")) }.isSuccess
-                        if (!opened) runCatching { context.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
-                    }) { Text("Wireless debugging") }
+                    TextButton(onClick = { openWirelessDebugging() }) { Text("Wireless debugging") }
                 }
                 Row(Modifier.fillMaxWidth()) {
                     TextButton(onClick = {
@@ -206,7 +179,7 @@ internal fun CarBridgeSettingsRow() {
                     TextButton(onClick = { CarBridgeController.refreshRunningState(context) }) { Text("Apply/Test") }
                 }
                 Text(
-                    "If pairing is required: tap Pair, open Wireless debugging, use split screen/pop-up view, tap 'Pair device with pairing code', then enter the code in BitChord.",
+                    "Pair: tap Pair → allow 'Display over other apps' once → Wireless debugging opens → tap 'Pair device with pairing code' → enter 6-digit code in BitChord overlay popup.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
