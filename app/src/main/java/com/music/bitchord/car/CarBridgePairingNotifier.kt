@@ -4,7 +4,6 @@ import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -40,7 +39,11 @@ object CarBridgePairingNotifier {
             return
         }
         CarBridgeAdb.startDiscovery(app)
-        post(app, "Wireless debugging pairing", "Tap 'Enter pairing code', then input 6-digit code from Wireless debugging screen.")
+        post(
+            app,
+            "Wireless debugging pairing",
+            "Open Wireless debugging > Pair device with pairing code. Pull this notification down and tap Enter pairing code."
+        )
         startWatching(app)
     }
 
