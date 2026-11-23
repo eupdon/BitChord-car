@@ -80,7 +80,7 @@ object CarBridgePairingOverlay {
         val input = EditText(app).apply {
             inputType = InputType.TYPE_CLASS_NUMBER
             filters = arrayOf(InputFilter.LengthFilter(6))
-            hint = "123456"
+            setHint("123456")
             setHintTextColor("#88FFFFFF".toColorInt())
             setTextColor("#FFFFFFFF".toColorInt())
             setSingleLine(true)
