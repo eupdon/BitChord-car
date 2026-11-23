@@ -1,8 +1,11 @@
 package com.music.bitchord.ui.screens
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings as AndroidSettings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,7 +25,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,10 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.car.CarBridgeAccess
 import com.music.bitchord.car.CarBridgeAccessMode
@@ -67,6 +67,17 @@ internal fun CarBridgeSettingsRow() {
         }
     }
 
+    val notifPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            CarBridgeAdb.startDiscovery(context)
+            CarBridgePairingNotifier.show(context)
+            val opened = runCatching { context.startActivity(Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS")) }.isSuccess
+            if (!opened) runCatching { context.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
+        } else {
+            Toast.makeText(context, "Notification permission is required for pairing code input.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     fun openWirelessDebugging() {
         val opened = runCatching { context.startActivity(Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS")) }.isSuccess
         if (!opened) runCatching { context.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
@@ -74,6 +85,12 @@ internal fun CarBridgeSettingsRow() {
 
     fun startPairingNotificationFlow() {
         CarBridgeAdb.startDiscovery(context)
+        val needsNotifPerm = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        if (needsNotifPerm) {
+            notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
         CarBridgePairingNotifier.show(context)
         openWirelessDebugging()
         Toast.makeText(context, "Pairing notification posted. Pull down notification and tap 'Enter pairing code'.", Toast.LENGTH_LONG).show()
