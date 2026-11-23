@@ -40,7 +40,7 @@ import com.music.bitchord.car.CarBridgeAccessMode
 import com.music.bitchord.car.CarBridgeAdb
 import com.music.bitchord.car.CarBridgeController
 import com.music.bitchord.car.CarBridgeDnsService
-import com.music.bitchord.car.CarBridgePairingOverlay
+import com.music.bitchord.car.CarBridgePairingNotifier
 import com.music.bitchord.car.CarBridgeRouteManager
 import com.music.bitchord.car.CarBridgeService
 
@@ -53,14 +53,12 @@ import com.music.bitchord.car.CarBridgeService
 @Composable
 internal fun CarBridgeSettingsRow() {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val enabled by CarBridgeController.enabled.collectAsStateWithLifecycle()
     val mode by CarBridgeController.accessMode.collectAsStateWithLifecycle()
     val adb by CarBridgeAdb.state.collectAsStateWithLifecycle()
     val route by CarBridgeRouteManager.state.collectAsStateWithLifecycle()
 
     var domain by remember { mutableStateOf(CarBridgeAccess.localDomain(context)) }
-    var waitingOverlayPermission by remember { mutableStateOf(false) }
 
     val vpnLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -74,33 +72,11 @@ internal fun CarBridgeSettingsRow() {
         if (!opened) runCatching { context.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
     }
 
-    fun startPairingOverlayFlow() {
+    fun startPairingNotificationFlow() {
         CarBridgeAdb.startDiscovery(context)
-        if (CarBridgePairingOverlay.canShow(context)) {
-            CarBridgePairingOverlay.show(context)
-            openWirelessDebugging()
-            waitingOverlayPermission = false
-        } else {
-            waitingOverlayPermission = true
-            Toast.makeText(context, "Allow 'Display over other apps' for BitChord, then return.", Toast.LENGTH_LONG).show()
-            val intent = Intent(
-                AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:${context.packageName}")
-            )
-            runCatching { context.startActivity(intent) }
-        }
-    }
-
-    DisposableEffect(lifecycleOwner, waitingOverlayPermission) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME && waitingOverlayPermission && CarBridgePairingOverlay.canShow(context)) {
-                waitingOverlayPermission = false
-                CarBridgePairingOverlay.show(context)
-                openWirelessDebugging()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        CarBridgePairingNotifier.show(context)
+        openWirelessDebugging()
+        Toast.makeText(context, "Pairing notification posted. Pull down notification and tap 'Enter pairing code'.", Toast.LENGTH_LONG).show()
     }
 
     LaunchedEffect(Unit) {
@@ -180,7 +156,7 @@ internal fun CarBridgeSettingsRow() {
                 Row(Modifier.fillMaxWidth()) {
                     TextButton(onClick = { CarBridgeAdb.startDiscovery(context); CarBridgeAdb.connect(context, null) }) { Text("Auto connect") }
                     Spacer(Modifier.width(4.dp))
-                    TextButton(onClick = { startPairingOverlayFlow() }) { Text("Pair") }
+                    TextButton(onClick = { startPairingNotificationFlow() }) { Text("Pair") }
                     Spacer(Modifier.width(4.dp))
                     TextButton(onClick = { openWirelessDebugging() }) { Text("Wireless debugging") }
                 }
@@ -201,7 +177,7 @@ internal fun CarBridgeSettingsRow() {
                     TextButton(onClick = { CarBridgeController.refreshRunningState(context) }) { Text("Apply/Test") }
                 }
                 Text(
-                    "Pair: tap Pair → allow 'Display over other apps' once → Wireless debugging opens → tap 'Pair device with pairing code' → enter 6-digit code in BitChord overlay popup.",
+                    "Pair: tap Pair → Wireless debugging opens → tap 'Pair device with pairing code' → pull down BitChord pairing notification → tap 'Enter pairing code' and input 6 digits.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
