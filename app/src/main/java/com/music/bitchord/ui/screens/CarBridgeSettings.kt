@@ -74,25 +74,35 @@ internal fun CarBridgeSettingsRow() {
     }
 
     fun startPairingNotificationFlow() {
-        CarBridgeAdb.startDiscovery(context)
-        val needsNotifPerm = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        if (needsNotifPerm) {
-            // Avoid in-app permission launcher here: on some ROMs/flows it can recreate the host activity.
-            // Send user to app notification settings, then they can tap Pair again.
-            Toast.makeText(context, "Allow BitChord notifications, then tap Pair again.", Toast.LENGTH_LONG).show()
-            val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                Intent(AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS)
-                    .putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName)
-            } else {
-                Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+        runCatching {
+            CarBridgeAdb.startDiscovery(context)
+            val needsNotifPerm = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            if (needsNotifPerm) {
+                // Avoid in-app RequestPermission launcher: it can crash/recreate the host activity on some setups.
+                // Shizuku-style flow relies on notification; send user to app notification settings, then Pair again.
+                Toast.makeText(context, "Allow BitChord notifications, then tap Pair again.", Toast.LENGTH_LONG).show()
+                val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    Intent(AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName)
+                } else {
+                    Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+                }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                runCatching { context.startActivity(intent) }.onFailure {
+                    runCatching {
+                        context.startActivity(
+                            Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    }
+                }
+                return
             }
-            runCatching { context.startActivity(intent) }
-            return
+            CarBridgePairingNotifier.show(context)
+            openWirelessDebugging()
+        }.onFailure { e ->
+            Toast.makeText(context, "Pair failed: ${e.message ?: e.javaClass.simpleName}", Toast.LENGTH_LONG).show()
         }
-        CarBridgePairingNotifier.show(context)
-        openWirelessDebugging()
-        Toast.makeText(context, "Pairing notification posted. Pull down notification and tap 'Enter pairing code'.", Toast.LENGTH_LONG).show()
     }
 
     LaunchedEffect(Unit) {
