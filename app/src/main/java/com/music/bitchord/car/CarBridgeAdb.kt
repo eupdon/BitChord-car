@@ -160,16 +160,21 @@ object CarBridgeAdb {
         val app = context.applicationContext
         init(app)
         val code = pairingCode.trim()
-        val port = pairPort ?: _state.value.pairPort ?: savedPairPort(app)
         if (code.length < 6) {
             _state.value = _state.value.copy(status = Status.ERROR, detail = "Pairing code required")
             return
         }
-        if (port == null || port <= 0) {
-            _state.value = _state.value.copy(status = Status.ERROR, detail = "Pairing port required. Open Wireless debugging > Pair device with pairing code.")
-            return
-        }
         scope.launch {
+            // Pairing port can appear slightly after user opens the pairing dialog; wait briefly.
+            startDiscovery(app)
+            val port = resolvePairPort(app, pairPort)
+            if (port == null || port <= 0) {
+                _state.value = _state.value.copy(
+                    status = Status.ERROR,
+                    detail = "Pairing port not detected. Open Wireless debugging > Pair device with pairing code, keep it visible, then retry."
+                )
+                return@launch
+            }
             mutex.withLock {
                 _state.value = _state.value.copy(status = Status.PAIRING, detail = "Pairing on 127.0.0.1:$port ...")
                 val ok = runCatching {
@@ -185,6 +190,21 @@ object CarBridgeAdb {
                 }
             }
         }
+    }
+
+    private suspend fun resolvePairPort(context: Context, preferred: Int?): Int? {
+        repeat(12) { // ~6s
+            val port = preferred?.takeIf { it > 0 }
+                ?: _state.value.pairPort?.takeIf { it > 0 }
+                ?: _state.value.discoveredPairPorts.firstOrNull()?.takeIf { it > 0 }
+                ?: savedPairPort(context)?.takeIf { it > 0 }
+            if (port != null) return port
+            delay(500)
+        }
+        return preferred?.takeIf { it > 0 }
+            ?: _state.value.pairPort?.takeIf { it > 0 }
+            ?: _state.value.discoveredPairPorts.firstOrNull()?.takeIf { it > 0 }
+            ?: savedPairPort(context)?.takeIf { it > 0 }
     }
 
     fun connect(context: Context, connectPort: Int?) {
