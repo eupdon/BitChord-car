@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings as AndroidSettings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,7 +30,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.car.CarBridgeAccess
 import com.music.bitchord.car.CarBridgeAccessMode
@@ -48,12 +53,14 @@ import com.music.bitchord.car.CarBridgeService
 @Composable
 internal fun CarBridgeSettingsRow() {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val enabled by CarBridgeController.enabled.collectAsStateWithLifecycle()
     val mode by CarBridgeController.accessMode.collectAsStateWithLifecycle()
     val adb by CarBridgeAdb.state.collectAsStateWithLifecycle()
     val route by CarBridgeRouteManager.state.collectAsStateWithLifecycle()
 
     var domain by remember { mutableStateOf(CarBridgeAccess.localDomain(context)) }
+    var waitingOverlayPermission by remember { mutableStateOf(false) }
 
     val vpnLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -72,13 +79,28 @@ internal fun CarBridgeSettingsRow() {
         if (CarBridgePairingOverlay.canShow(context)) {
             CarBridgePairingOverlay.show(context)
             openWirelessDebugging()
+            waitingOverlayPermission = false
         } else {
+            waitingOverlayPermission = true
+            Toast.makeText(context, "Allow 'Display over other apps' for BitChord, then return.", Toast.LENGTH_LONG).show()
             val intent = Intent(
                 AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION,
                 Uri.parse("package:${context.packageName}")
             )
             runCatching { context.startActivity(intent) }
         }
+    }
+
+    DisposableEffect(lifecycleOwner, waitingOverlayPermission) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && waitingOverlayPermission && CarBridgePairingOverlay.canShow(context)) {
+                waitingOverlayPermission = false
+                CarBridgePairingOverlay.show(context)
+                openWirelessDebugging()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     LaunchedEffect(Unit) {
