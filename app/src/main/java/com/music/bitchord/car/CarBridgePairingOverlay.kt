@@ -8,6 +8,7 @@ import android.os.Build
 import android.provider.Settings
 import android.text.InputFilter
 import android.text.InputType
+import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -29,6 +30,7 @@ import kotlinx.coroutines.launch
  */
 object CarBridgePairingOverlay {
 
+    private const val TAG = "CarBridgePairingOverlay"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var view: View? = null
     private var wm: WindowManager? = null
@@ -165,6 +167,7 @@ object CarBridgePairingOverlay {
 
         runCatching { wm.addView(root, params) }.onSuccess {
             view = root
+            Toast.makeText(app, "BitChord pairing popup shown", Toast.LENGTH_SHORT).show()
             statusJob = scope.launch {
                 while (view != null) {
                     val s = CarBridgeAdb.state.value
@@ -182,8 +185,9 @@ object CarBridgePairingOverlay {
                     delay(700)
                 }
             }
-        }.onFailure {
-            Toast.makeText(app, "Overlay failed: ${it.message}", Toast.LENGTH_LONG).show()
+        }.onFailure { e ->
+            Log.w(TAG, "Overlay add failed", e)
+            Toast.makeText(app, "Overlay failed: ${e.message ?: e.javaClass.simpleName}", Toast.LENGTH_LONG).show()
         }
     }
 
