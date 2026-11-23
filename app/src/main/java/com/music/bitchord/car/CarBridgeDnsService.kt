@@ -19,6 +19,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.FileInputStream
@@ -48,11 +51,11 @@ class CarBridgeDnsService : VpnService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            stopDns(this)
+            shutdown()
             return START_NOT_STICKY
         }
         if (!CarBridgeController.isEnabled(this) || CarBridgeAccess.mode(this) != CarBridgeAccessMode.TESLA_LOCAL_DOMAIN) {
-            stopDns(this)
+            shutdown()
             return START_NOT_STICKY
         }
         startForeground(NOTIFICATION_ID, buildNotification())
@@ -70,8 +73,23 @@ class CarBridgeDnsService : VpnService() {
     }
 
     override fun onRevoke() {
-        stopDns(this)
+        shutdown()
         super.onRevoke()
+    }
+
+    private fun shutdown() {
+        running = false
+        loopJob?.cancel()
+        loopJob = null
+        runCatching { vpnInterface?.close() }
+        vpnInterface = null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
+        stopSelf()
     }
 
     private fun restartTunnel() {
@@ -283,11 +301,11 @@ class CarBridgeDnsService : VpnService() {
         }
         val open = PendingIntent.getActivity(
             this, 20, Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
         )
         val stop = PendingIntent.getService(
             this, 21, Intent(this, CarBridgeDnsService::class.java).setAction(ACTION_STOP),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
         )
         val domain = CarBridgeAccess.localDomain(this)
         val ip = CarBridgeAccess.publicIp(this)
@@ -305,8 +323,11 @@ class CarBridgeDnsService : VpnService() {
         private const val TAG = "CarBridgeDns"
         private const val NOTIFICATION_ID = 8778
         private const val ACTION_STOP = "com.music.bitchord.car.DNS_STOP"
-        @Volatile var running: Boolean = false
-            private set
+        private val _runningFlow = MutableStateFlow(false)
+        val runningFlow: StateFlow<Boolean> = _runningFlow.asStateFlow()
+        var running: Boolean
+            get() = _runningFlow.value
+            private set(value) { _runningFlow.value = value }
 
         fun start(context: Context) {
             val app = context.applicationContext
