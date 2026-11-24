@@ -798,6 +798,12 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- Foreground service for the wireless-debugging pairing code notification. -->
+        <service
+            android:name=".car.CarBridgePairingService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <service
             android:name=".car.CarBridgeDnsService"
             android:exported="false"
