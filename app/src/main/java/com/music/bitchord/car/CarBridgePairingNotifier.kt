@@ -57,13 +57,17 @@ object CarBridgePairingNotifier {
     /** From the notification's reply action. */
     fun handleCode(context: Context, code: String, port: Int?) {
         val app = context.applicationContext
-        val digits = code.filter(Char::isDigit).take(6)
-        if (digits.length < 6) {
+        // "123456" or "123456 37123" (code + port shown in the pairing dialog).
+        val tokens = code.split(Regex("[^0-9]+")).filter { it.isNotEmpty() }
+        val digits = tokens.firstOrNull().orEmpty()
+        val manualPort = tokens.getOrNull(1)?.toIntOrNull()?.takeIf { it in 1024..65535 }
+        Log.d(TAG, "handleCode: codeLen=${digits.length} port=$port manualPort=$manualPort")
+        if (digits.length != 6) {
             // Must re-post anyway, otherwise the reply spinner never goes away.
-            notify(app, buildInput(app, port, "Invalid code. Enter 6 digits."))
+            notify(app, buildInput(app, port, "Invalid code. Enter the 6 digits (optionally followed by the port)."))
             return
         }
-        CarBridgeAdb.pair(app, digits, port)
+        CarBridgeAdb.pair(app, digits, manualPort ?: port)
     }
 
     fun cancel(context: Context) {
@@ -74,18 +78,7 @@ object CarBridgePairingNotifier {
 
     // ---- notification builders (used by the service) ----
 
-    /** Pairing dialog not open yet. */
-    internal fun buildSearching(ctx: Context): Notification =
-        base(ctx, alert = false)
-            .setContentTitle("Wireless debugging pairing")
-            .setContentText("Open Wireless debugging > Pair device with pairing code.")
-            .setStyle(NotificationCompat.BigTextStyle().bigText(
-                "Open Wireless debugging > Pair device with pairing code and keep that dialog visible. " +
-                    "This notification will ask for the code once it is detected."))
-            .addAction(0, "Cancel", cancelPending(ctx))
-            .build()
-
-    /** Pairing dialog detected: this is the one with the text field. */
+    /** The notification with the text field. It is shown even before the pairing port is found. */
     internal fun buildInput(ctx: Context, port: Int?, hint: String? = null): Notification {
         val replyIntent = Intent(ctx, CarBridgePairingReceiver::class.java)
             .setAction(ACTION_PAIR_CODE)
@@ -101,7 +94,11 @@ object CarBridgePairingNotifier {
             .addRemoteInput(remoteInput)
             .setAllowGeneratedReplies(false)
             .build()
-        val text = hint ?: "Pairing dialog detected. Tap Enter pairing code and type the 6 digits."
+        val text = hint ?: if (port != null) {
+            "Pairing dialog detected. Tap Enter pairing code and type the 6 digits."
+        } else {
+            "Open Wireless debugging > Pair device with pairing code, then tap Enter pairing code and type the 6 digits."
+        }
         return base(ctx, alert = true) // alert = heads-up pop-up
             .setContentTitle("Wireless debugging pairing")
             .setContentText(text)

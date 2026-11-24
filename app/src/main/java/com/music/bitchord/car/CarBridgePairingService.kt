@@ -30,7 +30,7 @@ class CarBridgePairingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         CarBridgePairingNotifier.ensureChannel(this)
-        val first = CarBridgePairingNotifier.buildSearching(this)
+        val first = CarBridgePairingNotifier.buildInput(this, null)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(CarBridgePairingNotifier.NOTIF_ID, first, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
@@ -51,7 +51,7 @@ class CarBridgePairingService : Service() {
 
     private suspend fun watch() {
         var lastKey: String? = null
-        withTimeoutOrNull(3 * 60_000L) {
+        withTimeoutOrNull(10 * 60_000L) {
             CarBridgeAdb.state
                 .takeWhile { it.status != CarBridgeAdb.Status.READY }
                 .collect { s ->
@@ -62,14 +62,14 @@ class CarBridgePairingService : Service() {
 
                     // Only re-post when something meaningful changed. Re-posting while the
                     // user is typing in the notification wipes what they typed.
+                    Log.d(TAG, "state=${s.status} port=$port busy=$busy detail=${s.detail}")
                     val key = "$port|$busy|$error"
                     if (key == lastKey) return@collect
                     lastKey = key
 
                     val n = when {
                         busy -> CarBridgePairingNotifier.buildStatus(this@CarBridgePairingService, s.detail, busy = true)
-                        port != null -> CarBridgePairingNotifier.buildInput(this@CarBridgePairingService, port, error)
-                        else -> CarBridgePairingNotifier.buildSearching(this@CarBridgePairingService)
+                        else -> CarBridgePairingNotifier.buildInput(this@CarBridgePairingService, port, error)
                     }
                     CarBridgePairingNotifier.notify(this@CarBridgePairingService, n)
                 }
