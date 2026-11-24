@@ -1,6 +1,8 @@
 package com.music.bitchord.car
 
 import android.Manifest
+import android.annotation.SuppressLint
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -8,168 +10,173 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import com.music.bitchord.R
 
+/**
+ * Wireless-debugging pairing notification (Shizuku style).
+ *
+ * The notification itself is owned by [CarBridgePairingService], a foreground
+ * service. That is what keeps the process alive and mDNS callbacks flowing
+ * while the user is inside Settings. This object only builds the notifications
+ * and forwards the typed code.
+ */
 object CarBridgePairingNotifier {
 
-    const val CHANNEL_ID = "car_bridge_pairing"
+    // New id: a channel's sound/importance can't be changed after creation.
+    const val CHANNEL_ID = "car_bridge_pairing_v2"
     const val NOTIF_ID = 8778
     const val ACTION_PAIR_CODE = "com.music.bitchord.car.action.PAIR_CODE"
     const val ACTION_CANCEL = "com.music.bitchord.car.action.PAIR_CANCEL"
     const val KEY_PAIR_CODE = "pair_code"
+    const val EXTRA_PAIR_PORT = "pair_port"
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private var watchJob: Job? = null
+    private const val TAG = "CarBridgePairing"
 
+    /** Called from the Pair button (app is in the foreground, so the FGS start is allowed). */
     fun show(context: Context) {
         val app = context.applicationContext
-        ensureChannel(app)
         if (!canPost(app)) {
             Toast.makeText(app, "Notification permission required for pairing code input.", Toast.LENGTH_LONG).show()
             return
         }
-        CarBridgeAdb.startDiscovery(app)
-        post(
-            app,
-            "Wireless debugging pairing",
-            "Open Wireless debugging > Pair device with pairing code. Pull this notification down and tap Enter pairing code."
-        )
-        Toast.makeText(app, "Pairing notification posted. Pull down notification and tap 'Enter pairing code'.", Toast.LENGTH_LONG).show()
-        startWatching(app)
+        ensureChannel(app)
+        runCatching {
+            ContextCompat.startForegroundService(app, Intent(app, CarBridgePairingService::class.java))
+        }.onFailure {
+            Log.e(TAG, "Could not start pairing service", it)
+            Toast.makeText(app, "Could not start pairing: ${it.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
-    fun handleCode(context: Context, code: String) {
+    /** From the notification's reply action. */
+    fun handleCode(context: Context, code: String, port: Int?) {
         val app = context.applicationContext
-        val trimmed = code.trim().filter(Char::isDigit).take(6)
-        if (trimmed.length < 6) {
-            post(app, "Wireless debugging pairing", "Invalid code. Enter 6 digits.")
+        val digits = code.filter(Char::isDigit).take(6)
+        if (digits.length < 6) {
+            // Must re-post anyway, otherwise the reply spinner never goes away.
+            notify(app, buildInput(app, port, "Invalid code. Enter 6 digits."))
             return
         }
-        post(app, "Wireless debugging pairing", "Pairing with code $trimmed ...")
-        CarBridgeAdb.pair(app, trimmed, null)
-        startWatching(app)
+        CarBridgeAdb.pair(app, digits, port)
     }
 
     fun cancel(context: Context) {
-        watchJob?.cancel()
-        watchJob = null
-        NotificationManagerCompat.from(context.applicationContext).cancel(NOTIF_ID)
+        val app = context.applicationContext
+        app.stopService(Intent(app, CarBridgePairingService::class.java))
+        NotificationManagerCompat.from(app).cancel(NOTIF_ID)
     }
 
-    private fun startWatching(context: Context) {
-        val app = context.applicationContext
-        watchJob?.cancel()
-        watchJob = scope.launch {
-            var lastDetail: String? = null
-            repeat(120) { // ~2 min
-                val s = CarBridgeAdb.state.value
-                val detail = s.detail
-                val pairPort = s.pairPort ?: s.discoveredPairPorts.firstOrNull()
-                val text = when {
-                    s.status == CarBridgeAdb.Status.READY || detail.contains("Pairing succeeded", true) ->
-                        "Paired/connected. You can return to BitChord."
-                    s.status == CarBridgeAdb.Status.PAIRING -> detail
-                    s.status == CarBridgeAdb.Status.ERROR -> detail
-                    pairPort != null -> "Pairing port detected: $pairPort. Enter 6-digit code."
-                    else -> "Open Wireless debugging > Pair device with pairing code, then enter code here."
-                }
-                if (text != lastDetail) {
-                    post(app, "Wireless debugging pairing", text)
-                    lastDetail = text
-                }
-                if (s.status == CarBridgeAdb.Status.READY || detail.contains("Pairing succeeded", true)) {
-                    delay(2000)
-                    cancel(app)
-                    return@launch
-                }
-                delay(1000)
-            }
-        }
-    }
+    // ---- notification builders (used by the service) ----
 
-    private fun post(context: Context, title: String, text: String) {
-        val app = context.applicationContext
-        ensureChannel(app)
-        if (!canPost(app)) return
+    /** Pairing dialog not open yet. */
+    internal fun buildSearching(ctx: Context): Notification =
+        base(ctx, alert = false)
+            .setContentTitle("Wireless debugging pairing")
+            .setContentText("Open Wireless debugging > Pair device with pairing code.")
+            .setStyle(NotificationCompat.BigTextStyle().bigText(
+                "Open Wireless debugging > Pair device with pairing code and keep that dialog visible. " +
+                    "This notification will ask for the code once it is detected."))
+            .addAction(0, "Cancel", cancelPending(ctx))
+            .build()
 
-        val port = CarBridgeAdb.state.value.pairPort
-            ?: CarBridgeAdb.state.value.discoveredPairPorts.firstOrNull()
-            ?: -1
-        val replyIntent = Intent(app, CarBridgePairingReceiver::class.java)
+    /** Pairing dialog detected: this is the one with the text field. */
+    internal fun buildInput(ctx: Context, port: Int?, hint: String? = null): Notification {
+        val replyIntent = Intent(ctx, CarBridgePairingReceiver::class.java)
             .setAction(ACTION_PAIR_CODE)
-            .putExtra("pair_port", port)
+            .putExtra(EXTRA_PAIR_PORT, port ?: -1)
         val replyPending = PendingIntent.getBroadcast(
-            app, 100, replyIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or pendingIntentMutability()
+            ctx, 100, replyIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
         )
         val remoteInput = RemoteInput.Builder(KEY_PAIR_CODE)
             .setLabel("6-digit pairing code")
             .build()
-        val replyAction = NotificationCompat.Action.Builder(android.R.drawable.ic_menu_edit, "Enter pairing code", replyPending)
+        val replyAction = NotificationCompat.Action.Builder(0, "Enter pairing code", replyPending)
             .addRemoteInput(remoteInput)
             .setAllowGeneratedReplies(false)
             .build()
-
-        val cancelIntent = Intent(app, CarBridgePairingReceiver::class.java).setAction(ACTION_CANCEL)
-        val cancelPending = PendingIntent.getBroadcast(
-            app, 101, cancelIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or pendingIntentMutability()
-        )
-
-        val openIntent = Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        val openPending = PendingIntent.getActivity(
-            app, 102, openIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or pendingIntentMutability()
-        )
-
-        val notif = NotificationCompat.Builder(app, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth) // fallback; replaced if app icon available
-            .setContentTitle(title)
+        val text = hint ?: "Pairing dialog detected. Tap Enter pairing code and type the 6 digits."
+        return base(ctx, alert = true) // alert = heads-up pop-up
+            .setContentTitle("Wireless debugging pairing")
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setContentIntent(openPending)
             .addAction(replyAction)
-            .addAction(0, "Cancel", cancelPending)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .addAction(0, "Cancel", cancelPending(ctx))
+            .build()
+    }
+
+    /** Busy / done / failed, no input field. */
+    internal fun buildStatus(ctx: Context, text: String, busy: Boolean): Notification =
+        base(ctx, alert = false)
+            .setContentTitle("Wireless debugging pairing")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setOngoing(busy)
+            .setProgress(0, 0, busy)
             .build()
 
-        // Use app icon if present
-        val iconId = app.resources.getIdentifier("ic_launcher_foreground", "drawable", app.packageName)
-            .takeIf { it != 0 }
-            ?: app.applicationInfo.icon
-        val fixed = NotificationCompat.Builder(app, notif).setSmallIcon(iconId).build()
-        runCatching { NotificationManagerCompat.from(app).notify(NOTIF_ID, fixed) }
+    @SuppressLint("MissingPermission")
+    internal fun notify(ctx: Context, n: Notification) {
+        if (!canPost(ctx)) return
+        try {
+            NotificationManagerCompat.from(ctx).notify(NOTIF_ID, n)
+        } catch (e: Throwable) {
+            // Was runCatching before, which hid why nothing appeared.
+            Log.e(TAG, "notify failed", e)
+        }
     }
 
-    private fun canPost(context: Context): Boolean {
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-    }
-
-    private fun ensureChannel(context: Context) {
+    internal fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (nm.getNotificationChannel(CHANNEL_ID) != null) return
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Car Bridge pairing", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Wireless debugging pairing code input"
+                setSound(null, null)
+                enableVibration(false)
             }
         )
     }
 
-    private fun pendingIntentMutability(): Int =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_MUTABLE else 0
+    private fun base(ctx: Context, alert: Boolean): NotificationCompat.Builder {
+        val openIntent = Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val openPending = PendingIntent.getActivity(
+            ctx, 102, openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        return NotificationCompat.Builder(ctx, CHANNEL_ID)
+            // Monochrome vector. The old code fell back to the adaptive launcher
+            // mipmap, which is not a valid status-bar icon.
+            .setSmallIcon(R.drawable.ic_notification_logo)
+            .setContentIntent(openPending)
+            .setOngoing(true)
+            .setOnlyAlertOnce(!alert)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+    }
+
+    private fun cancelPending(ctx: Context): PendingIntent =
+        PendingIntent.getBroadcast(
+            ctx, 101,
+            Intent(ctx, CarBridgePairingReceiver::class.java).setAction(ACTION_CANCEL),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+    private fun mutableFlag(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
+
+    internal fun canPost(context: Context): Boolean {
+        val permOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        return permOk && NotificationManagerCompat.from(context).areNotificationsEnabled()
+    }
 }

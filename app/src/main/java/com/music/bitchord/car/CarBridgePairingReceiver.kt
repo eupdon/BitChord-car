@@ -13,15 +13,11 @@ class CarBridgePairingReceiver : BroadcastReceiver() {
                     ?.getCharSequence(CarBridgePairingNotifier.KEY_PAIR_CODE)
                     ?.toString()
                     .orEmpty()
-                val port = intent.getIntExtra("pair_port", -1).takeIf { it > 0 }
-                if (port != null) {
-                    CarBridgeAdb.setManualEndpoint(context, "127.0.0.1", CarBridgeAdb.state.value.connectPort, port)
-                }
-                CarBridgePairingNotifier.handleCode(context, code)
+                val port = intent.getIntExtra(CarBridgePairingNotifier.EXTRA_PAIR_PORT, -1).takeIf { it > 0 }
+                // The pairing service (foreground) keeps the process alive while pairing runs.
+                CarBridgePairingNotifier.handleCode(context, code, port)
             }
-            CarBridgePairingNotifier.ACTION_CANCEL -> {
-                CarBridgePairingNotifier.cancel(context)
-            }
+            CarBridgePairingNotifier.ACTION_CANCEL -> CarBridgePairingNotifier.cancel(context)
         }
     }
 }

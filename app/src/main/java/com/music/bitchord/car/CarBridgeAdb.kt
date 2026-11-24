@@ -103,8 +103,16 @@ object CarBridgeAdb {
     fun startDiscovery(context: Context) {
         val app = context.applicationContext
         init(app)
+        // Already running: do not restart (a restart wipes freshly found ports).
+        if (mdns != null && discoveryJob?.isActive == true) return
         stopDiscovery()
-        _state.value = _state.value.copy(status = Status.DISCOVERING, detail = "Discovering wireless debugging services...")
+        _state.value = _state.value.copy(
+            status = if (_state.value.status == Status.READY) Status.READY else Status.DISCOVERING,
+            detail = "Discovering wireless debugging services...",
+            pairPort = null,
+            discoveredPairPorts = emptyList(),
+            discoveredConnectPorts = emptyList(),
+        )
         acquireMulticastLock(app)
         try {
             val m = KadbMdnsAndroid(app)
@@ -117,12 +125,9 @@ object CarBridgeAdb {
                         val pairPorts = st.pairDevices.mapNotNull { it.port.takeIf { p -> p > 0 } }.distinct()
                         val connectHost = st.connectDevices.firstOrNull()?.host?.takeIf { it.isNotBlank() } ?: _state.value.connectHost
                         val connectPort = connectPorts.firstOrNull() ?: _state.value.connectPort
-                        val pairPort = pairPorts.firstOrNull() ?: _state.value.pairPort
+                        val pairPort = pairPorts.firstOrNull()
                         if (connectPort != null && connectPort > 0) {
                             prefs(app).edit().putInt(KEY_CONNECT_PORT, connectPort).putString(KEY_CONNECT_HOST, connectHost).apply()
-                        }
-                        if (pairPort != null && pairPort > 0) {
-                            prefs(app).edit().putInt(KEY_PAIR_PORT, pairPort).apply()
                         }
                         _state.value = _state.value.copy(
                             status = if (_state.value.status == Status.READY) Status.READY else Status.DISCOVERING,
@@ -166,8 +171,8 @@ object CarBridgeAdb {
         }
         scope.launch {
             // Pairing port can appear slightly after user opens the pairing dialog; wait briefly.
-            startDiscovery(app)
-            val port = resolvePairPort(app, pairPort)
+            if (mdns == null) startDiscovery(app)
+            val port = resolvePairPort(pairPort)
             if (port == null || port <= 0) {
                 _state.value = _state.value.copy(
                     status = Status.ERROR,
@@ -181,7 +186,6 @@ object CarBridgeAdb {
                     Kadb.pair("127.0.0.1", port, code)
                 }
                 ok.onSuccess {
-                    prefs(app).edit().putInt(KEY_PAIR_PORT, port).apply()
                     _state.value = _state.value.copy(status = Status.PAIRING_REQUIRED, detail = "Pairing succeeded. Connecting...")
                     ensureConnected(app, userInitiated = true)
                 }.onFailure { e ->
@@ -192,19 +196,14 @@ object CarBridgeAdb {
         }
     }
 
-    private suspend fun resolvePairPort(context: Context, preferred: Int?): Int? {
-        repeat(12) { // ~6s
-            val port = preferred?.takeIf { it > 0 }
-                ?: _state.value.pairPort?.takeIf { it > 0 }
-                ?: _state.value.discoveredPairPorts.firstOrNull()?.takeIf { it > 0 }
-                ?: savedPairPort(context)?.takeIf { it > 0 }
-            if (port != null) return port
+    // Pairing ports change every time the pairing dialog opens, so never fall back to a saved one.
+    private suspend fun resolvePairPort(preferred: Int?): Int? {
+        preferred?.takeIf { it > 0 }?.let { return it }
+        repeat(20) { // ~10s
+            _state.value.discoveredPairPorts.firstOrNull()?.let { return it }
             delay(500)
         }
-        return preferred?.takeIf { it > 0 }
-            ?: _state.value.pairPort?.takeIf { it > 0 }
-            ?: _state.value.discoveredPairPorts.firstOrNull()?.takeIf { it > 0 }
-            ?: savedPairPort(context)?.takeIf { it > 0 }
+        return null
     }
 
     fun connect(context: Context, connectPort: Int?) {
@@ -315,7 +314,7 @@ object CarBridgeAdb {
         _state.value = _state.value.copy(
             connectHost = savedConnectHost(context),
             connectPort = savedConnectPort(context),
-            pairPort = savedPairPort(context),
+            pairPort = null,
         )
     }
 
