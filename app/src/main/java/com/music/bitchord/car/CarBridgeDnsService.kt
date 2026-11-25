@@ -23,7 +23,7 @@ import java.net.InetAddress
  *
  * Tesla's browser refuses RFC1918 destinations. This service uses Android's
  * local VPN API for one thing only: assigning the configured "public-looking"
- * IP (default 100.88.0.1) to this phone. The domain's A record must point to
+ * IP (default 192.0.2.1) to this phone. The domain's A record must point to
  * that same IP, with Cloudflare proxy disabled (DNS only). The car resolves the
  * domain, sends the packet to its phone hotspot, and the phone delivers it to
  * its own tun address, where CarBridgeService (0.0.0.0:8777) is listening.

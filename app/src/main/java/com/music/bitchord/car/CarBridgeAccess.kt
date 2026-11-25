@@ -21,9 +21,11 @@ object CarBridgeAccess {
     const val KEY_PUBLIC_IP = "public_ip"
     const val DEFAULT_LOCAL_DOMAIN = "bitchord.car"
     // Assigned to the phone itself by the local VPN. The domain's A record must
-    // point here (DNS only, no Cloudflare proxy) so the Tesla browser's packets
-    // arrive on the phone's hotspot and are delivered to this local address.
-    const val DEFAULT_PUBLIC_IP = "100.88.0.1"
+    // point here (DNS only, no Cloudflare proxy) so the browser's packets arrive
+    // on the phone's hotspot and are delivered to this local address.
+    // TEST-NET-1 is intentionally unroutable on the public Internet: it looks
+    // public to embedded browsers but cannot leak to anyone's real server.
+    const val DEFAULT_PUBLIC_IP = "192.0.2.1"
 
     fun mode(context: Context): CarBridgeAccessMode =
         CarBridgeAccessMode.fromPref(prefs(context).getString(KEY_MODE, null))
