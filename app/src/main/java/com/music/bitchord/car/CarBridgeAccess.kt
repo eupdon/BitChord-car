@@ -20,8 +20,10 @@ object CarBridgeAccess {
     const val KEY_LOCAL_DOMAIN = "local_domain"
     const val KEY_PUBLIC_IP = "public_ip"
     const val DEFAULT_LOCAL_DOMAIN = "bitchord.car"
-    // Public-looking IP outside RFC1918; mapped locally via embedded ADB iptables + DNS VPN.
-    const val DEFAULT_PUBLIC_IP = "172.32.0.1"
+    // Assigned to the phone itself by the local VPN. The domain's A record must
+    // point here (DNS only, no Cloudflare proxy) so the Tesla browser's packets
+    // arrive on the phone's hotspot and are delivered to this local address.
+    const val DEFAULT_PUBLIC_IP = "100.88.0.1"
 
     fun mode(context: Context): CarBridgeAccessMode =
         CarBridgeAccessMode.fromPref(prefs(context).getString(KEY_MODE, null))
@@ -56,7 +58,7 @@ object CarBridgeAccess {
     fun notificationText(context: Context): String = when (mode(context)) {
         CarBridgeAccessMode.DIRECT_IP -> accessUrl(context)
         CarBridgeAccessMode.TESLA_LOCAL_DOMAIN ->
-            "${accessUrl(context)}  (map ${publicIp(context)} -> phone)"
+            "${accessUrl(context)}  (local IP ${publicIp(context)})"
     }
 
     /**

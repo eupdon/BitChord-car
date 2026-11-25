@@ -3,13 +3,12 @@ package com.music.bitchord.car
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 
 /**
  * Single source of truth for the car bridge settings.
@@ -22,24 +21,58 @@ object CarBridgeController {
     private const val PREFS = "car_bridge"
     private const val KEY_ENABLED = "enabled"
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
     private val _enabled = MutableStateFlow(false)
     val enabled: StateFlow<Boolean> = _enabled.asStateFlow()
 
     private val _accessMode = MutableStateFlow(CarBridgeAccessMode.DIRECT_IP)
     val accessMode: StateFlow<CarBridgeAccessMode> = _accessMode.asStateFlow()
 
+    /**
+     * VPN authorization must be requested from an Activity. Boot/app-start
+     * paths emit here; the settings screen collects it and launches the
+     * system consent dialog.
+     */
+    private val _vpnPermissionRequests = MutableSharedFlow<Unit>(
+        replay = 1,
+        extraBufferCapacity = 1
+    )
+    val vpnPermissionRequests: SharedFlow<Unit> = _vpnPermissionRequests.asSharedFlow()
+
     /** Call from the UI so state reflects persisted choices. */
     fun load(context: Context) {
         val app = context.applicationContext
         _enabled.value = isEnabled(app)
         _accessMode.value = CarBridgeAccess.mode(app)
-        CarBridgeAdb.init(app)
         syncFromPrefs(app)
     }
 
     fun isEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_ENABLED, false)
+
+    fun vpnPrepareIntent(context: Context): Intent? =
+        CarBridgeDnsService.prepareIntent(context.applicationContext)
+
+    /** Starts the local-IP service when already authorized, otherwise asks the UI. */
+    fun requestVpnPermission(context: Context) {
+        val app = context.applicationContext
+        if (!isEnabled(app) || CarBridgeAccess.mode(app) != CarBridgeAccessMode.TESLA_LOCAL_DOMAIN) return
+        if (vpnPrepareIntent(app) == null) {
+            CarBridgeDnsService.start(app)
+            refreshRunningState(app)
+        } else {
+            _vpnPermissionRequests.tryEmit(Unit)
+        }
+    }
+
+    /** Called by the ActivityResultLauncher in the settings screen. */
+    fun onVpnPermissionResult(context: Context, granted: Boolean) {
+        val app = context.applicationContext
+        if (granted && isEnabled(app) && CarBridgeAccess.mode(app) == CarBridgeAccessMode.TESLA_LOCAL_DOMAIN) {
+            CarBridgeDnsService.start(app)
+        } else {
+            CarBridgeDnsService.stopDns(app)
+        }
+        refreshRunningState(app)
+    }
 
     fun setAccessMode(context: Context, mode: CarBridgeAccessMode) {
         val app = context.applicationContext
@@ -47,10 +80,7 @@ object CarBridgeController {
         _accessMode.value = mode
         if (isEnabled(app)) {
             if (mode == CarBridgeAccessMode.TESLA_LOCAL_DOMAIN) {
-                // DNS VPN requires user approval; service start only when already prepared.
-                if (CarBridgeDnsService.prepareIntent(app) == null) {
-                    CarBridgeDnsService.start(app)
-                }
+                requestVpnPermission(app)
             } else {
                 CarBridgeDnsService.stopDns(app)
             }
@@ -74,13 +104,15 @@ object CarBridgeController {
         if (on) {
             if (!CarBridgeService.running) {
                 runCatching { ContextCompat.startForegroundService(app, intent) }
-            } else {
-                refreshRunningState(app)
             }
+            if (_accessMode.value == CarBridgeAccessMode.TESLA_LOCAL_DOMAIN) {
+                requestVpnPermission(app)
+            } else {
+                CarBridgeDnsService.stopDns(app)
+            }
+            refreshRunningState(app)
         } else {
-            scope.launch { CarBridgeRouteManager.clear(app) }
             CarBridgeDnsService.stopDns(app)
-            CarBridgeAdb.close()
             if (CarBridgeService.running) app.stopService(intent)
         }
     }
@@ -92,11 +124,12 @@ object CarBridgeController {
         val intent = Intent(app, CarBridgeService::class.java)
         if (value) {
             ContextCompat.startForegroundService(app, intent)
+            if (CarBridgeAccess.mode(app) == CarBridgeAccessMode.TESLA_LOCAL_DOMAIN) {
+                requestVpnPermission(app)
+            }
             refreshRunningState(app)
         } else {
-            scope.launch { CarBridgeRouteManager.clear(app) }
             CarBridgeDnsService.stopDns(app)
-            CarBridgeAdb.close()
             app.stopService(intent)
         }
     }
@@ -106,15 +139,11 @@ object CarBridgeController {
         val app = context.applicationContext
         prefs(app).edit().putBoolean(KEY_ENABLED, false).apply()
         _enabled.value = false
-        scope.launch { CarBridgeRouteManager.clear(app) }
         CarBridgeDnsService.stopDns(app)
-        CarBridgeAdb.close()
     }
 
     fun refreshRunningState(context: Context) {
         val app = context.applicationContext
-        CarBridgeAdb.refresh(app)
-        scope.launch { CarBridgeRouteManager.apply(app) }
         if (CarBridgeService.running) {
             runCatching {
                 app.startService(
