@@ -23,9 +23,9 @@ object CarBridgeAccess {
     // Assigned to the phone itself by the local VPN. The domain's A record must
     // point here (DNS only, no Cloudflare proxy) so the browser's packets arrive
     // on the phone's hotspot and are delivered to this local address.
-    // TEST-NET-1 is intentionally unroutable on the public Internet: it looks
-    // public to embedded browsers but cannot leak to anyone's real server.
-    const val DEFAULT_PUBLIC_IP = "192.0.2.1"
+    // Link-local is the workaround for Android 13+ ROMs that drop hotspot
+    // clients' packets to CGNAT / other off-link destinations.
+    const val DEFAULT_PUBLIC_IP = "169.254.88.1"
 
     fun mode(context: Context): CarBridgeAccessMode =
         CarBridgeAccessMode.fromPref(prefs(context).getString(KEY_MODE, null))
