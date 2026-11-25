@@ -404,11 +404,6 @@ dependencies {
     implementation("io.ktor:ktor-server-cio:3.5.2")
     implementation("io.ktor:ktor-server-websockets:3.5.2")
 
-    // ---- Embedded ADB: in-app wireless debugging pair/connect/shell for Tesla mode ----
-    implementation("com.flyfishxu:kadb:2.1.5")
-    implementation("com.flyfishxu:kadb-mdns:2.1.4")
-    implementation("org.conscrypt:conscrypt-android:2.5.3")
-
     // ---- YouTube stream extraction: live-benchmarked client catalog + cipher tiers ----
     implementation("com.github.MetrolistGroup.innertubex:innertubex-android:v0.7.0")
 
