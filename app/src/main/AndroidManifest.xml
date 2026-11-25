@@ -4,14 +4,11 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- Tells Wi-Fi from mobile data, so the matching quality ceiling applies. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-    <!-- Car Bridge Local Domain: show pairing-code overlay over Wireless Debugging screen. -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Saving a track to Music outlives the screen it was asked from. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -749,11 +746,6 @@
             android:name=".widget.MediaWidgetActions"
             android:exported="false" />
 
-        <!-- Car Bridge wireless-debugging pairing code notification action. -->
-        <receiver
-            android:name=".car.CarBridgePairingReceiver"
-            android:exported="false" />
-
         <!--
           Hands the Replay poster to whichever app the user picks to send it
           with. The authority is derived from the applicationId rather than
@@ -795,12 +787,6 @@
 
         <service
             android:name=".car.CarBridgeService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-
-        <!-- Foreground service for the wireless-debugging pairing code notification. -->
-        <service
-            android:name=".car.CarBridgePairingService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
