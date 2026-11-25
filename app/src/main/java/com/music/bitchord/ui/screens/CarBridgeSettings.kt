@@ -1,13 +1,6 @@
 package com.music.bitchord.ui.screens
 
-import android.Manifest
 import android.app.Activity
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Build
-import android.provider.Settings as AndroidSettings
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
@@ -33,76 +26,30 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.car.CarBridgeAccess
 import com.music.bitchord.car.CarBridgeAccessMode
-import com.music.bitchord.car.CarBridgeAdb
 import com.music.bitchord.car.CarBridgeController
 import com.music.bitchord.car.CarBridgeDnsService
-import com.music.bitchord.car.CarBridgePairingNotifier
-import com.music.bitchord.car.CarBridgeRouteManager
-import com.music.bitchord.car.CarBridgeService
 
 /**
  * Settings entry for Tesla/car web remote.
  *
- * Local Domain mode is BitChord-native: embedded ADB (Kadb) + local DNS VPN.
- * No external Shizuku app required.
+ * Local Domain mode assigns a public-looking IP to the phone itself through a
+ * local VPN, so the Tesla browser can reach the on-phone web server via a
+ * domain. No wireless debugging, ADB pairing, root or iptables is involved.
  */
 @Composable
 internal fun CarBridgeSettingsRow() {
     val context = LocalContext.current
     val enabled by CarBridgeController.enabled.collectAsStateWithLifecycle()
     val mode by CarBridgeController.accessMode.collectAsStateWithLifecycle()
-    val adb by CarBridgeAdb.state.collectAsStateWithLifecycle()
-    val route by CarBridgeRouteManager.state.collectAsStateWithLifecycle()
     val dnsRunning by CarBridgeDnsService.runningFlow.collectAsStateWithLifecycle()
 
     var domain by remember { mutableStateOf(CarBridgeAccess.localDomain(context)) }
 
     val vpnLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            CarBridgeDnsService.start(context)
-            CarBridgeController.refreshRunningState(context)
-        }
-    }
-
-    fun openWirelessDebugging() {
-        val opened = runCatching { context.startActivity(Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS")) }.isSuccess
-        if (!opened) runCatching { context.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
-    }
-
-    fun startPairingNotificationFlow() {
-        runCatching {
-            CarBridgeAdb.startDiscovery(context)
-            val needsNotifPerm = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-            if (needsNotifPerm) {
-                // Avoid in-app RequestPermission launcher: it can crash/recreate the host activity on some setups.
-                // Shizuku-style flow relies on notification; send user to app notification settings, then Pair again.
-                Toast.makeText(context, "Allow BitChord notifications, then tap Pair again.", Toast.LENGTH_LONG).show()
-                val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    Intent(AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS)
-                        .putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName)
-                } else {
-                    Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
-                }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                runCatching { context.startActivity(intent) }.onFailure {
-                    runCatching {
-                        context.startActivity(
-                            Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
-                    }
-                }
-                return
-            }
-            CarBridgePairingNotifier.show(context)
-            openWirelessDebugging()
-        }.onFailure { e ->
-            Toast.makeText(context, "Pair failed: ${e.message ?: e.javaClass.simpleName}", Toast.LENGTH_LONG).show()
-        }
+        CarBridgeController.onVpnPermissionResult(context, result.resultCode == Activity.RESULT_OK)
     }
 
     LaunchedEffect(Unit) {
@@ -110,10 +57,14 @@ internal fun CarBridgeSettingsRow() {
         domain = CarBridgeAccess.localDomain(context)
     }
 
-    LaunchedEffect(enabled, mode) {
-        if (enabled && mode == CarBridgeAccessMode.TESLA_LOCAL_DOMAIN) {
-            CarBridgeAdb.startDiscovery(context)
-            CarBridgeController.refreshRunningState(context)
+    LaunchedEffect(vpnLauncher) {
+        CarBridgeController.vpnPermissionRequests.collect {
+            val prepare = CarBridgeController.vpnPrepareIntent(context)
+            if (prepare != null) {
+                vpnLauncher.launch(prepare)
+            } else {
+                CarBridgeController.onVpnPermissionResult(context, true)
+            }
         }
     }
 
@@ -136,7 +87,7 @@ internal fun CarBridgeSettingsRow() {
             title = "Access mode",
             subtitle = when (mode) {
                 CarBridgeAccessMode.DIRECT_IP -> "Direct hotspot IP (simple, but Tesla browser may block private IPs)"
-                CarBridgeAccessMode.TESLA_LOCAL_DOMAIN -> "Built-in Local Domain mode. Ports/IP auto-handled; pairing may be required once."
+                CarBridgeAccessMode.TESLA_LOCAL_DOMAIN -> "Local domain via a local IP on this phone. No pairing or root required."
             },
             trailing = {
                 TextButton(onClick = {
@@ -156,7 +107,8 @@ internal fun CarBridgeSettingsRow() {
             RowDivider()
             Column(Modifier.fillMaxWidth().padding(horizontal = ROW_INSET, vertical = 8.dp)) {
                 Text(
-                    "Tesla blocks private IPs. BitChord handles Local Domain automatically. Pairing is only needed once; pairing overlay can stay over Wireless Debugging.",
+                    "Tesla blocks private IPs. Point this domain's A record to ${CarBridgeAccess.publicIp(context)} " +
+                        "with Cloudflare proxy OFF (DNS only), then authorize the local VPN.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -174,36 +126,33 @@ internal fun CarBridgeSettingsRow() {
                 )
                 Spacer(Modifier.height(8.dp))
                 Text("URL: ${CarBridgeController.accessUrl(context)}", style = MaterialTheme.typography.bodySmall)
-                Text("ADB: ${adb.status} - ${adb.detail}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Route: ${if (route.applied) "active" else "inactive"} - ${route.message}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("DNS VPN: ${if (dnsRunning) "running" else "stopped"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "Local IP: ${CarBridgeAccess.publicIp(context)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "VPN: ${if (dnsRunning) "active" else "not running"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Spacer(Modifier.height(8.dp))
 
                 Row(Modifier.fillMaxWidth()) {
-                    TextButton(onClick = { CarBridgeAdb.startDiscovery(context); CarBridgeAdb.connect(context, null) }) { Text("Auto connect") }
-                    Spacer(Modifier.width(4.dp))
-                    TextButton(onClick = { startPairingNotificationFlow() }) { Text("Pair") }
-                    Spacer(Modifier.width(4.dp))
-                    TextButton(onClick = { openWirelessDebugging() }) { Text("Wireless debugging") }
-                }
-                Row(Modifier.fillMaxWidth()) {
-                    TextButton(onClick = {
-                        val prep = CarBridgeDnsService.prepareIntent(context)
-                        if (prep != null) vpnLauncher.launch(prep) else {
-                            CarBridgeDnsService.start(context)
-                            CarBridgeController.refreshRunningState(context)
-                        }
-                    }) { Text("Start DNS VPN") }
+                    TextButton(onClick = { CarBridgeController.requestVpnPermission(context) }) {
+                        Text("Authorize VPN")
+                    }
                     Spacer(Modifier.width(4.dp))
                     TextButton(onClick = {
                         CarBridgeDnsService.stopDns(context)
                         CarBridgeController.refreshRunningState(context)
-                    }) { Text("Stop DNS VPN") }
+                    }) { Text("Stop VPN") }
                     Spacer(Modifier.width(4.dp))
-                    TextButton(onClick = { CarBridgeController.refreshRunningState(context) }) { Text("Apply/Test") }
+                    TextButton(onClick = { CarBridgeController.refreshRunningState(context) }) { Text("Refresh") }
                 }
                 Text(
-                    "Pair: tap Pair → Wireless debugging opens → tap 'Pair device with pairing code' → pull down BitChord pairing notification → tap 'Enter pairing code' and input 6 digits.",
+                    "On the phone: enable a 5 GHz hotspot. In the car: connect to that hotspot and open the URL above. " +
+                        "If the page does not load, check that the A record is DNS only and points to the Local IP.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
