@@ -280,6 +280,12 @@
                 <data android:mimeType="application/x-ogg" />
                 <data android:mimeType="application/x-flac" />
             </intent-filter>
+
+            <!-- Long-press shortcuts: Bridge ON / OFF / Restart. Exposed so
+                 Samsung Routines and launchers can trigger them directly. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
         </activity>
 
         <!--
@@ -783,7 +789,26 @@
             android:exported="false"
             android:initOrder="100" />
 
+        <!-- Automation control: no UI, launched by shortcuts / Routines. -->
+        <activity
+            android:name=".car.CarBridgeControlActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity="" />
 
+        <!-- Automation control: direct broadcast for Tasker / MacroDroid. -->
+        <receiver
+            android:name=".car.CarBridgeControlReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.music.bitchord.car.ENABLE" />
+                <action android:name="com.music.bitchord.car.DISABLE" />
+                <action android:name="com.music.bitchord.car.TOGGLE" />
+                <action android:name="com.music.bitchord.car.RESTART" />
+            </intent-filter>
+        </receiver>
 
         <service
             android:name=".car.CarBridgeService"
