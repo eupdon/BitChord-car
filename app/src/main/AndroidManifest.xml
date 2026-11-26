@@ -868,7 +868,6 @@
                 <action android:name="com.music.bitchord.car.ENABLE" />
                 <action android:name="com.music.bitchord.car.DISABLE" />
                 <action android:name="com.music.bitchord.car.TOGGLE" />
-                <action android:name="com.music.bitchord.car.RESTART" />
             </intent-filter>
         </receiver>
 
