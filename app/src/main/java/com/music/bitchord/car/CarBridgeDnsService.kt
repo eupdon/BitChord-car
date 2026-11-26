@@ -164,10 +164,12 @@ class CarBridgeDnsService : VpnService() {
         fun start(context: Context) {
             val app = context.applicationContext
             val intent = Intent(app, CarBridgeDnsService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                app.startForegroundService(intent)
-            } else {
-                app.startService(intent)
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    app.startForegroundService(intent)
+                } else {
+                    app.startService(intent)
+                }
             }
         }
 

@@ -123,7 +123,7 @@ object CarBridgeController {
         _enabled.value = value
         val intent = Intent(app, CarBridgeService::class.java)
         if (value) {
-            ContextCompat.startForegroundService(app, intent)
+            runCatching { ContextCompat.startForegroundService(app, intent) }
             if (CarBridgeAccess.mode(app) == CarBridgeAccessMode.TESLA_LOCAL_DOMAIN) {
                 requestVpnPermission(app)
             }
@@ -132,6 +132,25 @@ object CarBridgeController {
             CarBridgeDnsService.stopDns(app)
             app.stopService(intent)
         }
+    }
+
+    /**
+     * Force a fresh start without changing the saved on/off state.
+     *
+     * Used by the automation control entry points: after the phone hotspot has
+     * been down and up, the VPN tun and the local socket can be left pointing at
+     * a dead link. Tearing both down and bringing them back is what makes the
+     * car browser reach 169.254.88.1 again.
+     */
+    fun restart(context: Context) {
+        val app = context.applicationContext
+        val on = isEnabled(app)
+        CarBridgeDnsService.stopDns(app)
+        val intent = Intent(app, CarBridgeService::class.java)
+        if (CarBridgeService.running) app.stopService(intent)
+        _enabled.value = on
+        _accessMode.value = CarBridgeAccess.mode(app)
+        if (on) syncFromPrefs(app)
     }
 
     /** The notification's Stop action: remember the off state without re-calling stopService. */
