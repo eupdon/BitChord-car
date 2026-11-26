@@ -794,7 +794,6 @@
             android:name=".car.CarBridgeControlActivity"
             android:exported="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
-            android:noHistory="true"
             android:excludeFromRecents="true"
             android:taskAffinity="" />
 
