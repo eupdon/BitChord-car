@@ -26,7 +26,7 @@ import java.net.InetAddress
  * IP (default 169.254.88.1) to this phone. The domain's A record must point to
  * that same IP, with Cloudflare proxy disabled (DNS only). The car resolves the
  * domain, sends the packet to its phone hotspot, and the phone delivers it to
- * its own tun address, where CarBridgeService (0.0.0.0:8777) is listening.
+ * its own tun address, where CarBridgeService (0.0.0.0:80) is listening.
  *
  * Nothing is redirected, intercepted or collected: there is no upstream tunnel
  * and no DNS sniffing. The class name is kept for preference/manifest

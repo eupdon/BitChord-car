@@ -131,7 +131,7 @@ class CarBridgeService : Service() {
                 get("/") {
                     call.respondText(html, ContentType.Text.Html)
                 }
-                // Cheap connectivity check: open http://<phone-ip>:8777/health
+                // Cheap connectivity check: open http://<phone-ip>/health
                 get("/health") {
                     call.respondText("ok", ContentType.Text.Plain)
                 }
@@ -331,7 +331,7 @@ class CarBridgeService : Service() {
     private fun phoneIp(): String = CarBridgeAccess.phoneIp()
 
     companion object {
-        const val PORT = 8777
+        const val PORT = 80
 
         /** True while this process owns a live bridge, for the toggle's sync path. */
         @Volatile
