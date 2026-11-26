@@ -280,12 +280,6 @@
                 <data android:mimeType="application/x-ogg" />
                 <data android:mimeType="application/x-flac" />
             </intent-filter>
-
-            <!-- Long-press shortcuts: Bridge ON / OFF / Restart. Exposed so
-                 Samsung Routines and launchers can trigger them directly. -->
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/car_bridge_shortcuts" />
         </activity>
 
         <!--
@@ -301,6 +295,9 @@
             android:roundIcon="@mipmap/ic_launcher"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -315,6 +312,9 @@
             android:roundIcon="@mipmap/ic_monochrome"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -329,6 +329,9 @@
             android:roundIcon="@mipmap/ic_liquid_glass"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -343,6 +346,9 @@
             android:roundIcon="@mipmap/ic_liquid_glass_dark"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -357,6 +363,9 @@
             android:roundIcon="@mipmap/ic_liquid_glass_clear"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -371,6 +380,9 @@
             android:roundIcon="@mipmap/ic_liquid_glass_clear_dark"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -385,6 +397,9 @@
             android:roundIcon="@mipmap/ic_samsung_glass"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -399,6 +414,9 @@
             android:roundIcon="@mipmap/ic_samsung_glass_dark"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -413,6 +431,9 @@
             android:roundIcon="@mipmap/ic_samsung_glass_clear"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -427,6 +448,9 @@
             android:roundIcon="@mipmap/ic_samsung_glass_clear_dark"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -441,6 +465,9 @@
             android:roundIcon="@mipmap/ic_pixel_glass"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -455,6 +482,9 @@
             android:roundIcon="@mipmap/ic_pixel_glass_dark"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -469,6 +499,9 @@
             android:roundIcon="@mipmap/ic_pixel_glass_clear"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -483,6 +516,9 @@
             android:roundIcon="@mipmap/ic_pixel_glass_clear_dark"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -497,6 +533,9 @@
             android:roundIcon="@mipmap/ic_neon_silver"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -511,6 +550,9 @@
             android:roundIcon="@mipmap/ic_neon_cyan"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -525,6 +567,9 @@
             android:roundIcon="@mipmap/ic_neon_violet"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -539,6 +584,9 @@
             android:roundIcon="@mipmap/ic_samsung_neon_silver"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -553,6 +601,9 @@
             android:roundIcon="@mipmap/ic_samsung_neon_cyan"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -567,6 +618,9 @@
             android:roundIcon="@mipmap/ic_samsung_neon_violet"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -581,6 +635,9 @@
             android:roundIcon="@mipmap/ic_pixel_neon_silver"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -595,6 +652,9 @@
             android:roundIcon="@mipmap/ic_pixel_neon_cyan"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -609,6 +669,9 @@
             android:roundIcon="@mipmap/ic_pixel_neon_violet"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/car_bridge_shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
