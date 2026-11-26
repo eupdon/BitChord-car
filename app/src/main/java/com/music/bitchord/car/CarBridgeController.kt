@@ -112,8 +112,7 @@ object CarBridgeController {
             }
             refreshRunningState(app)
         } else {
-            CarBridgeDnsService.stopDns(app)
-            if (CarBridgeService.running) app.stopService(intent)
+            stopBridge(app)
         }
     }
 
@@ -121,17 +120,30 @@ object CarBridgeController {
         val app = context.applicationContext
         prefs(app).edit().putBoolean(KEY_ENABLED, value).apply()
         _enabled.value = value
-        val intent = Intent(app, CarBridgeService::class.java)
         if (value) {
+            val intent = Intent(app, CarBridgeService::class.java)
             runCatching { ContextCompat.startForegroundService(app, intent) }
             if (CarBridgeAccess.mode(app) == CarBridgeAccessMode.TESLA_LOCAL_DOMAIN) {
                 requestVpnPermission(app)
             }
             refreshRunningState(app)
         } else {
-            CarBridgeDnsService.stopDns(app)
-            app.stopService(intent)
+            stopBridge(app)
         }
+    }
+
+    /**
+     * Tear down the whole bridge without changing the saved choice.
+     *
+     * Every OFF path goes through here: the settings switch, the notification
+     * Stop action and the automation shortcut. The running flag is cleared
+     * immediately so a queued sync cannot mistake a stopping bridge for a live
+     * one.
+     */
+    private fun stopBridge(app: Context) {
+        CarBridgeDnsService.stopDns(app)
+        CarBridgeService.clearRunning()
+        runCatching { app.stopService(Intent(app, CarBridgeService::class.java)) }
     }
 
     /**
@@ -145,9 +157,7 @@ object CarBridgeController {
     fun restart(context: Context) {
         val app = context.applicationContext
         val on = isEnabled(app)
-        CarBridgeDnsService.stopDns(app)
-        val intent = Intent(app, CarBridgeService::class.java)
-        if (CarBridgeService.running) app.stopService(intent)
+        stopBridge(app)
         _enabled.value = on
         _accessMode.value = CarBridgeAccess.mode(app)
         if (on) syncFromPrefs(app)
@@ -159,6 +169,7 @@ object CarBridgeController {
         prefs(app).edit().putBoolean(KEY_ENABLED, false).apply()
         _enabled.value = false
         CarBridgeDnsService.stopDns(app)
+        CarBridgeService.clearRunning()
     }
 
     fun refreshRunningState(context: Context) {

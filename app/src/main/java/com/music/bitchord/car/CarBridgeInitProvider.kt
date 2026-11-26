@@ -29,6 +29,11 @@ class CarBridgeInitProvider : ContentProvider() {
             (app as? Application)?.registerActivityLifecycleCallbacks(
                 object : Application.ActivityLifecycleCallbacks {
                     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+                        // The no-UI control Activity only exists to apply an
+                        // ON/OFF/RESTART command. Reconciling here runs *before*
+                        // its onCreate and can restart what the command is
+                        // about to turn off, leaving a stale VPN interface.
+                        if (activity is CarBridgeControlActivity) return
                         reconcile(app)
                     }
 

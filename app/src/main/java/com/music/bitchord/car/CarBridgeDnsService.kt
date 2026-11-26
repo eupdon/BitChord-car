@@ -177,8 +177,11 @@ class CarBridgeDnsService : VpnService() {
             val app = context.applicationContext
             running = false
             val stopIntent = Intent(app, CarBridgeDnsService::class.java).setAction(ACTION_STOP)
-            val sent = runCatching { app.startService(stopIntent) }.isSuccess
-            if (!sent) runCatching { app.stopService(Intent(app, CarBridgeDnsService::class.java)) }
+            runCatching { app.startService(stopIntent) }
+            // Also tear the service down directly: if the STOP intent was
+            // queued before the service existed, onDestroy still closes the
+            // tun interface and removes the VPN notification/key icon.
+            runCatching { app.stopService(Intent(app, CarBridgeDnsService::class.java)) }
         }
 
         fun prepareIntent(context: Context): Intent? = VpnService.prepare(context.applicationContext)

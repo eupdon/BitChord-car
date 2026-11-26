@@ -271,7 +271,7 @@ class CarBridgeService : Service() {
         pusher?.cancel()
         bridge?.release()
         session = null
-        server?.stop(1_000L, 2_000L)
+        runCatching { server?.stop(1_000L, 2_000L) }
         server = null
         scope.cancel()
         super.onDestroy()
@@ -343,6 +343,11 @@ class CarBridgeService : Service() {
         @Volatile
         var running: Boolean = false
             private set
+
+        /** Called by the controller the moment an OFF/restart is requested. */
+        fun clearRunning() {
+            running = false
+        }
 
         private const val PREFS = "car_bridge"
         private const val KEY_TOKEN = "token"
