@@ -3,36 +3,39 @@
     <shortcut
         android:shortcutId="car_bridge_on"
         android:enabled="true"
-        android:icon="@android:drawable/ic_media_play"
+        android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/car_bridge_shortcut_on_short"
         android:shortcutLongLabel="@string/car_bridge_shortcut_on_long"
         android:shortcutDisabledMessage="@string/car_bridge_shortcut_disabled">
         <intent
             android:action="com.music.bitchord.car.ENABLE"
+            android:targetPackage="com.music.bitchord"
             android:targetClass="com.music.bitchord.car.CarBridgeControlActivity" />
     </shortcut>
 
     <shortcut
         android:shortcutId="car_bridge_off"
         android:enabled="true"
-        android:icon="@android:drawable/ic_media_pause"
+        android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/car_bridge_shortcut_off_short"
         android:shortcutLongLabel="@string/car_bridge_shortcut_off_long"
         android:shortcutDisabledMessage="@string/car_bridge_shortcut_disabled">
         <intent
             android:action="com.music.bitchord.car.DISABLE"
+            android:targetPackage="com.music.bitchord"
             android:targetClass="com.music.bitchord.car.CarBridgeControlActivity" />
     </shortcut>
 
     <shortcut
         android:shortcutId="car_bridge_restart"
         android:enabled="true"
-        android:icon="@android:drawable/ic_popup_sync"
+        android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/car_bridge_shortcut_restart_short"
         android:shortcutLongLabel="@string/car_bridge_shortcut_restart_long"
         android:shortcutDisabledMessage="@string/car_bridge_shortcut_disabled">
         <intent
             android:action="com.music.bitchord.car.RESTART"
+            android:targetPackage="com.music.bitchord"
             android:targetClass="com.music.bitchord.car.CarBridgeControlActivity" />
     </shortcut>
 </shortcuts>
