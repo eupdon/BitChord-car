@@ -53,8 +53,8 @@ object CarBridgeAccess {
     }
 
     fun accessUrl(context: Context): String = when (mode(context)) {
-        CarBridgeAccessMode.DIRECT_IP -> "http://${phoneIp()}/"
-        CarBridgeAccessMode.TESLA_LOCAL_DOMAIN -> "http://${localDomain(context)}/"
+        CarBridgeAccessMode.DIRECT_IP -> "http://${phoneIp()}:8777/"
+        CarBridgeAccessMode.TESLA_LOCAL_DOMAIN -> "http://${localDomain(context)}:8777/"
     }
 
     fun notificationText(context: Context): String = when (mode(context)) {

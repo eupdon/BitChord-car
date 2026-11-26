@@ -11,6 +11,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.music.bitchord.MainActivity
 import io.ktor.http.ContentType
@@ -131,7 +132,7 @@ class CarBridgeService : Service() {
                 get("/") {
                     call.respondText(html, ContentType.Text.Html)
                 }
-                // Cheap connectivity check: open http://<phone-ip>/health
+                // Cheap connectivity check: open http://<phone-ip>:8777/health
                 get("/health") {
                     call.respondText("ok", ContentType.Text.Plain)
                 }
@@ -230,7 +231,12 @@ class CarBridgeService : Service() {
                     }
                 }
             }
-        }.also { it.start(wait = false) }
+        }.also { engine ->
+            // A privileged-port bind failure must never take down the whole app
+            // process: this service is auto-started from CarBridgeInitProvider.
+            runCatching { engine.start(wait = false) }
+                .onFailure { Log.w(TAG, "Car bridge server failed to start", it) }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -331,7 +337,7 @@ class CarBridgeService : Service() {
     private fun phoneIp(): String = CarBridgeAccess.phoneIp()
 
     companion object {
-        const val PORT = 80
+        const val PORT = 8777
 
         /** True while this process owns a live bridge, for the toggle's sync path. */
         @Volatile
@@ -340,6 +346,7 @@ class CarBridgeService : Service() {
 
         private const val PREFS = "car_bridge"
         private const val KEY_TOKEN = "token"
+        private const val TAG = "CarBridgeService"
         private const val NOTIFICATION_ID = 8777
         const val ACTION_STOP = "com.music.bitchord.car.STOP"
         const val ACTION_REFRESH = "com.music.bitchord.car.REFRESH"
