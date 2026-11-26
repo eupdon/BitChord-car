@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="car_bridge_on"
+        android:enabled="true"
+        android:icon="@android:drawable/ic_media_play"
+        android:shortcutShortLabel="Bridge ON"
+        android:shortcutLongLabel="BitChord Car Bridge ON (restart)"
+        android:shortcutDisabledMessage="Car Bridge shortcut is disabled">
+        <intent
+            android:action="com.music.bitchord.car.ENABLE"
+            android:targetClass="com.music.bitchord.car.CarBridgeControlActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="car_bridge_off"
+        android:enabled="true"
+        android:icon="@android:drawable/ic_media_pause"
+        android:shortcutShortLabel="Bridge OFF"
+        android:shortcutLongLabel="BitChord Car Bridge OFF"
+        android:shortcutDisabledMessage="Car Bridge shortcut is disabled">
+        <intent
+            android:action="com.music.bitchord.car.DISABLE"
+            android:targetClass="com.music.bitchord.car.CarBridgeControlActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="car_bridge_restart"
+        android:enabled="true"
+        android:icon="@android:drawable/ic_popup_sync"
+        android:shortcutShortLabel="Bridge Restart"
+        android:shortcutLongLabel="Restart BitChord Car Bridge and VPN"
+        android:shortcutDisabledMessage="Car Bridge shortcut is disabled">
+        <intent
+            android:action="com.music.bitchord.car.RESTART"
+            android:targetClass="com.music.bitchord.car.CarBridgeControlActivity" />
+    </shortcut>
+</shortcuts>
