@@ -295,7 +295,7 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
 /* ---- raised player screen: | player | lyrics / queue | ----------------- */
 .player-sheet {
   position: fixed; left: 12px; right: 12px; top: 12px;
-  bottom: calc(var(--pillH) + 22px); z-index: 30;
+  bottom: 12px; z-index: 30;
   display: flex; flex-direction: column;
   background: linear-gradient(155deg, rgba(42, 42, 44, 0.97), rgba(22, 22, 24, 0.99));
   border: 1px solid var(--labelDivider); border-radius: 22px;
@@ -403,7 +403,7 @@ input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border: 0; bo
   .only-narrow { display: flex; }
   .main { padding: 0 18px 40px; }
   .pill-meta, .pill-volume { display: none; }
-  .player-sheet { left: 6px; right: 6px; top: 6px; bottom: calc(var(--pillH) + 8px); }
+  .player-sheet { left: 6px; right: 6px; top: 6px; bottom: 6px; }
   .ps-grid { grid-template-columns: 1fr; gap: 14px; overflow-y: auto; }
   .ps-player > img { width: 140px; height: 140px; }
   .ps-title { margin-top: 10px; font-size: 22px; }
