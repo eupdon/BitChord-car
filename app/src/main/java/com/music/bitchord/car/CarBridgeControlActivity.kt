@@ -17,21 +17,13 @@ object CarBridgeControl {
     const val ACTION_ENABLE = "com.music.bitchord.car.ENABLE"
     const val ACTION_DISABLE = "com.music.bitchord.car.DISABLE"
     const val ACTION_TOGGLE = "com.music.bitchord.car.TOGGLE"
-    const val ACTION_RESTART = "com.music.bitchord.car.RESTART"
 
     fun apply(context: Context, action: String?) {
         when (action) {
-            ACTION_ENABLE -> {
-                CarBridgeController.setEnabled(context, true)
-                CarBridgeController.restart(context)
-            }
+            ACTION_ENABLE -> CarBridgeController.restart(context, true)
             ACTION_DISABLE -> CarBridgeController.setEnabled(context, false)
-            ACTION_RESTART -> CarBridgeController.restart(context)
-            ACTION_TOGGLE -> {
-                val enable = !CarBridgeController.isEnabled(context)
-                CarBridgeController.setEnabled(context, enable)
-                if (enable) CarBridgeController.restart(context)
-            }
+            ACTION_TOGGLE ->
+                CarBridgeController.restart(context, !CarBridgeController.isEnabled(context))
         }
     }
 }
@@ -45,7 +37,6 @@ class CarBridgeControlActivity : Activity() {
         val enables = when (action) {
             CarBridgeControl.ACTION_ENABLE -> true
             CarBridgeControl.ACTION_DISABLE -> false
-            CarBridgeControl.ACTION_RESTART -> CarBridgeController.isEnabled(this)
             else -> !CarBridgeController.isEnabled(this)
         }
         CarBridgeControl.apply(this, action)

@@ -2,6 +2,8 @@ package com.music.bitchord.car
 
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +22,7 @@ object CarBridgeController {
 
     private const val PREFS = "car_bridge"
     private const val KEY_ENABLED = "enabled"
+    private const val RESTART_DELAY_MS = 250L
 
     private val _enabled = MutableStateFlow(false)
     val enabled: StateFlow<Boolean> = _enabled.asStateFlow()
@@ -146,21 +149,33 @@ object CarBridgeController {
         runCatching { app.stopService(Intent(app, CarBridgeService::class.java)) }
     }
 
+    private fun startBridge(app: Context) {
+        val intent = Intent(app, CarBridgeService::class.java)
+        runCatching { ContextCompat.startForegroundService(app, intent) }
+        if (CarBridgeAccess.mode(app) == CarBridgeAccessMode.TESLA_LOCAL_DOMAIN) {
+            requestVpnPermission(app)
+        } else {
+            CarBridgeDnsService.stopDns(app)
+        }
+        refreshRunningState(app)
+    }
+
     /**
-     * Force a fresh start without changing the saved on/off state.
+     * Force a fresh bridge with an explicit final state.
      *
-     * Used by the automation control entry points: after the phone hotspot has
-     * been down and up, the VPN tun and the local socket can be left pointing at
-     * a dead link. Tearing both down and bringing them back is what makes the
-     * car browser reach 169.254.88.1 again.
+     * The stop requests are posted before the start, so starting immediately
+     * can be undone when the stopped service's onDestroy() arrives later. A
+     * short delay lets the tun and HTTP socket close before bringing them back.
      */
-    fun restart(context: Context) {
+    fun restart(context: Context, forceOn: Boolean) {
         val app = context.applicationContext
-        val on = isEnabled(app)
         stopBridge(app)
-        _enabled.value = on
+        prefs(app).edit().putBoolean(KEY_ENABLED, forceOn).apply()
+        _enabled.value = forceOn
         _accessMode.value = CarBridgeAccess.mode(app)
-        if (on) syncFromPrefs(app)
+        Handler(Looper.getMainLooper()).postDelayed({
+            if (forceOn) startBridge(app) else stopBridge(app)
+        }, RESTART_DELAY_MS)
     }
 
     /** The notification's Stop action: remember the off state without re-calling stopService. */
