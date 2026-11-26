@@ -1501,4 +1501,13 @@
     <string name="replay_year_summary_minutes">Minutes listened</string>
     <string name="replay_year_mute">Mute the story</string>
     <string name="replay_year_unmute">Unmute the story</string>
+
+    <!-- Car Bridge automation shortcuts (long-press app icon / Routines). -->
+    <string name="car_bridge_shortcut_on_short">Bridge ON</string>
+    <string name="car_bridge_shortcut_on_long">BitChord Car Bridge ON (restart)</string>
+    <string name="car_bridge_shortcut_off_short">Bridge OFF</string>
+    <string name="car_bridge_shortcut_off_long">BitChord Car Bridge OFF</string>
+    <string name="car_bridge_shortcut_restart_short">Bridge Restart</string>
+    <string name="car_bridge_shortcut_restart_long">Restart BitChord Car Bridge and VPN</string>
+    <string name="car_bridge_shortcut_disabled">Car Bridge shortcut is disabled</string>
 </resources>
