@@ -1503,11 +1503,11 @@
     <string name="replay_year_unmute">Unmute the story</string>
 
     <!-- Car Bridge automation shortcuts (long-press app icon / Routines). -->
-    <string name="car_bridge_shortcut_on_short">Bridge ON</string>
-    <string name="car_bridge_shortcut_on_long">BitChord Car Bridge ON (restart)</string>
-    <string name="car_bridge_shortcut_off_short">Bridge OFF</string>
-    <string name="car_bridge_shortcut_off_long">BitChord Car Bridge OFF</string>
-    <string name="car_bridge_shortcut_restart_short">Bridge Restart</string>
-    <string name="car_bridge_shortcut_restart_long">Restart BitChord Car Bridge and VPN</string>
-    <string name="car_bridge_shortcut_disabled">Car Bridge shortcut is disabled</string>
+    <string name="car_bridge_shortcut_on_short">서버 시작</string>
+    <string name="car_bridge_shortcut_on_long">서버 시작 (강제 재시작 포함)</string>
+    <string name="car_bridge_shortcut_off_short">서버 중지</string>
+    <string name="car_bridge_shortcut_off_long">서버 중지</string>
+    <string name="car_bridge_shortcut_restart_short">서버 재시작</string>
+    <string name="car_bridge_shortcut_restart_long">서버 및 VPN 재시작</string>
+    <string name="car_bridge_shortcut_disabled">서버 바로가기를 사용할 수 없습니다</string>
 </resources>
