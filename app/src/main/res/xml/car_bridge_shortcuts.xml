@@ -4,9 +4,9 @@
         android:shortcutId="car_bridge_on"
         android:enabled="true"
         android:icon="@android:drawable/ic_media_play"
-        android:shortcutShortLabel="Bridge ON"
-        android:shortcutLongLabel="BitChord Car Bridge ON (restart)"
-        android:shortcutDisabledMessage="Car Bridge shortcut is disabled">
+        android:shortcutShortLabel="@string/car_bridge_shortcut_on_short"
+        android:shortcutLongLabel="@string/car_bridge_shortcut_on_long"
+        android:shortcutDisabledMessage="@string/car_bridge_shortcut_disabled">
         <intent
             android:action="com.music.bitchord.car.ENABLE"
             android:targetClass="com.music.bitchord.car.CarBridgeControlActivity" />
@@ -16,9 +16,9 @@
         android:shortcutId="car_bridge_off"
         android:enabled="true"
         android:icon="@android:drawable/ic_media_pause"
-        android:shortcutShortLabel="Bridge OFF"
-        android:shortcutLongLabel="BitChord Car Bridge OFF"
-        android:shortcutDisabledMessage="Car Bridge shortcut is disabled">
+        android:shortcutShortLabel="@string/car_bridge_shortcut_off_short"
+        android:shortcutLongLabel="@string/car_bridge_shortcut_off_long"
+        android:shortcutDisabledMessage="@string/car_bridge_shortcut_disabled">
         <intent
             android:action="com.music.bitchord.car.DISABLE"
             android:targetClass="com.music.bitchord.car.CarBridgeControlActivity" />
@@ -28,9 +28,9 @@
         android:shortcutId="car_bridge_restart"
         android:enabled="true"
         android:icon="@android:drawable/ic_popup_sync"
-        android:shortcutShortLabel="Bridge Restart"
-        android:shortcutLongLabel="Restart BitChord Car Bridge and VPN"
-        android:shortcutDisabledMessage="Car Bridge shortcut is disabled">
+        android:shortcutShortLabel="@string/car_bridge_shortcut_restart_short"
+        android:shortcutLongLabel="@string/car_bridge_shortcut_restart_long"
+        android:shortcutDisabledMessage="@string/car_bridge_shortcut_disabled">
         <intent
             android:action="com.music.bitchord.car.RESTART"
             android:targetClass="com.music.bitchord.car.CarBridgeControlActivity" />
